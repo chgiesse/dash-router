@@ -53,25 +53,20 @@ class RouteConfig(BaseModel):
 
 class PageNode(BaseModel):
     
-    layout: Union[Callable, Component]
+    layout: Callable | Component
     module: str
     segment: str
-    path: Optional[str] = None
-    path_template: Optional[str] = None
-    view_template: Optional[str] = None
+    parent_segment: str
+    path: str | None = None
+    path_template: str | None = None
+    view_template: str | None = None
+    is_slot: bool = False
+    is_static: bool = True
+    is_root: bool | None = None
     parallel_routes: Dict[str, 'PageNode'] = Field(default_factory=dict)
     slots: Dict[str, 'PageNode'] = Field(default_factory=dict)
-    has_slots: bool = False
-    title: Optional[str] = None
-    description: Optional[str] = None
-    name: Optional[str] = None
-    order: Optional[int] = None
-    image: Optional[str] = None
-    image_url: Optional[str] = None
-    redirect_from: Optional[List[str]] = None
-    is_loading: Optional[Union[Callable, Component]] = None
-    on_error: Optional[Union[Callable, Component]] = None
-    is_static: bool = True
+    is_loading: Callable | Component | None = None
+    on_error: Callable | Component | None = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -90,6 +85,7 @@ class PageNode(BaseModel):
         
         self.parallel_routes[node.segment] = node
 
+
     def get_child_node(self, segment: str):
 
         if view_node := self.parallel_routes.get(segment):
@@ -104,19 +100,20 @@ class PageNode(BaseModel):
         config = config or RouteConfig()
 
         self.path_template = config.path_template
-        self.title = config.title
-        self.description = config.description
-        self.order = config.order
-        self.image = config.image
-        self.image_url = config.image_url
-        self.redirect_from = config.redirect_from
-        self.has_slots = config.has_slots
+        # self.title = config.title
+        # self.description = config.description
+        # self.order = config.order
+        # self.image = config.image
+        # self.image_url = config.image_url
+        # self.redirect_from = config.redirect_from
+        # self.has_slots = config.has_slots
         self.view_template = config.view_template
 
 
 class RootNode(BaseModel):
 
     routes: Dict[str, PageNode] = Field(default_factory=OrderedDict)
+    segment: str = '/'
 
     class Config:
         arbitrary_types_allowed = True

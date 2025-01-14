@@ -1,9 +1,7 @@
 from router import RouteConfig
 import dash_mantine_components as dmc
 
-config = RouteConfig(
-    view_template='[invoice]'
-)
+config = RouteConfig()
 
 async def layout(invoice = None, **kwargs):
     return dmc.SimpleGrid(

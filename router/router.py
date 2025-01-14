@@ -60,19 +60,21 @@ class Router:
         current_dir = os.path.join(parent_dir, segment)
         if not os.path.exists(current_dir):
             return
+        
         entries = os.listdir(current_dir)
         dir_has_page = 'page.py' in entries
 
         if dir_has_page:
-            new_node = self.load_route_module(current_dir, segment)
-            print(current_dir, new_node)
-            
+            new_node = self.load_route_module(current_dir, segment, current_node.segment)
             # Set the path based on the directory structure
             if current_dir == self.pages_folder:
                 new_node.path = '/'
+                new_node.segment = '/'
+                new_node.parent_segment = None
                 self.route_registry.register_root_route(new_node)
             
             else:
+                # print(current_dir, segment, new_node.parent_segment)
                 # Remove the base directory from the path
                 relative_path = os.path.relpath(current_dir, self.pages_folder)
                 new_node.path = relative_path
@@ -80,18 +82,14 @@ class Router:
                 register_at_root = True
 
                 if isinstance(current_node, PageNode):
-
                     if current_node.view_template:
+                        # print(current_node.view_template)
                         current_node.register_route(new_node)
                         register_at_root = False
-                        current_node.is_static = False
-                        new_node.is_static = False
                     
-                    if current_node.has_slots:
+                    if new_node.is_slot:
                         current_node.register_slot(new_node)
                         register_at_root = False
-                        current_node.is_static = False
-                        new_node.is_static = False
 
                 # register static route
                 if register_at_root:
@@ -110,11 +108,13 @@ class Router:
                 self._traverse_directory(current_dir, entry, next_node)
 
 
-    def load_route_module(self, current_dir: str, segment: str) -> PageNode:
+    def load_route_module(self, current_dir: str, segment: str, parent_segment: str) -> PageNode:
 
         module_path = os.path.join(current_dir, 'page.py')
         module_path_parts = os.path.splitext(module_path)[0].split(os.sep)
         module_name = '.'.join(module_path_parts)
+        is_root = parent_segment == '/' or not parent_segment 
+        segment = '/' if not parent_segment else segment
 
         try:
             # Import the module
@@ -124,13 +124,19 @@ class Router:
             if layout is None:
                 raise ImportError(f'Module {module_name} needs a layout function or component')
             
-            route_config: RouteConfig = getattr(page_module, 'config', None)
+            route_config: RouteConfig = getattr(page_module, 'config', RouteConfig())
+            is_slot = segment.startswith('(') and segment.endswith(')')
+            is_static = not is_slot and not route_config.view_template
+            cleaned_segment = segment.strip('()')
 
             new_node = PageNode(
                 layout=layout,
-                segment=segment,
-                title=segment,
-                module=module_name
+                segment=cleaned_segment,
+                parent_segment=parent_segment,
+                module=module_name,
+                is_slot=is_slot,
+                is_static=is_static,
+                is_root=is_root
             )
 
             new_node.load_config(route_config)

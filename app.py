@@ -16,5 +16,7 @@ router = Router(app)
 
 app.layout = create_appshell([RootContainer()])
 
+print(router.route_registry.routes)
+
 if __name__ == '__main__':
     app.run(debug=True, port=8031)
