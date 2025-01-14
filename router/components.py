@@ -2,15 +2,29 @@ from dash import html, dcc
 from dash.development.base_component import Component
 import random
 
-class ChildPageContainer(html.Div):   
+class ChildContainer(html.Div):   
 
     class ids:
-        container = lambda segment: {'type': 'DASH-ROUTER-SUB-ROUTE-CONTAINER', 'index': str(segment) + '-children'}
+        container = lambda segment: {'type': 'DASH-ROUTER-CHILD-ROUTE-CONTAINER', 'index': str(segment) + '-children'}
 
     def __init__(self, layout: Component, segment: str, *args, **kwargs):
 
         super().__init__(
             id=self.ids.container(segment),
+            children=layout,
+            *args,
+            **kwargs
+        )
+
+class SlotContainer(html.Div):
+
+    class ids:
+        container = lambda segment, slot_name: {'type': 'DASH-ROUTER-SLOT-ROUTE-CONTAINER', 'index': str(segment) + '-slot-' + str(slot_name)}
+
+    def __init__(self, layout: Component, segment: str, slot_name: str, *args, **kwargs):
+
+        super().__init__(
+            id=self.ids.container(segment, slot_name),
             children=layout,
             *args,
             **kwargs

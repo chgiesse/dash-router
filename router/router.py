@@ -1,5 +1,5 @@
 from .models import PageNode, RootNode, RouteConfig, ExecNode
-from .components import RootContainer, ChildPageContainer
+from .components import RootContainer, ChildContainer
 from typing import Dict, List, Optional, Union, Callable
 from dash.development.base_component import Component
 from flash._pages import _parse_query_string, _parse_path_variables
@@ -113,6 +113,8 @@ class Router:
         module_path = os.path.join(current_dir, 'page.py')
         module_path_parts = os.path.splitext(module_path)[0].split(os.sep)
         module_name = '.'.join(module_path_parts)
+
+        # Route is at top level when there is no parent or the parent is the root 
         is_root = parent_segment == '/' or not parent_segment 
         segment = '/' if not parent_segment else segment
 
@@ -190,54 +192,47 @@ class Router:
                 the remaining segments, and the active parent segment (str or None).
         '''
         remaining_segments = segments.copy()
-        active_parent = None  # Default parent is root
         active_root_node = None
 
         while remaining_segments:
             # Pop the first segment
-            current_segment = remaining_segments.pop(0)
+            current_segment = remaining_segments[0]
 
             if active_root_node is None:
+                print('FIRST ROUTE FOUND: ', current_segment)
                 active_root_node = self.route_registry.get_route(current_segment)
-                if active_root_node is None:
-                    # Attempt concatenation if allowed
-                    if not self.ignore_empty_folders and len(remaining_segments) >= 1:
-                        next_segment = remaining_segments.pop(0)
-                        concat_segment = f"{current_segment}/{next_segment}"
-                        remaining_segments.insert(0, concat_segment)
-                        print(f"Concatenated segments: '{concat_segment}'")
-                        continue
-                    else:
-                        print(f"No route found for segment '{current_segment}' and cannot concatenate.")
-                        return None, remaining_segments, active_parent
-
+                remaining_segments = remaining_segments[1:]
+                
             # Check if the current segment should be skipped based on loading_state
             if loading_state.get(current_segment, False):
                 print(f"Segment '{current_segment}' is active and will be skipped.")
                 if remaining_segments:
                     # Pop the next segment to traverse
-                    next_segment = remaining_segments.pop(0)
-                    print(f"Traversing to next segment: '{next_segment}'")
+                    next_segment = remaining_segments[0]
+                    print(f"Traversing to next segment: '{current_segment}'")
                     next_node = active_root_node.get_child_node(next_segment)
                     if next_node:
                         print(f"Found child node for segment '{next_segment}'")
-                        active_parent = current_segment  # Set active parent to current segment
                         active_root_node = next_node
+                        remaining_segments = remaining_segments[1:]
                         continue
                     else:
                         print(f"No child node found for segment '{next_segment}'.")
-                        return None, remaining_segments, active_parent
+                        return None, remaining_segments
                 else:
                     # No more segments to traverse
-                    return active_root_node, remaining_segments, active_parent
+                    return active_root_node, remaining_segments
 
             # If segment is not marked for skipping, return the current node
             if active_root_node:
-                print(f"Found root_route for segment: '{current_segment}'")
-                return active_root_node, remaining_segments, active_parent
+                if active_root_node.path_template:
+                    print(f"Found root_route for segment: '{current_segment}'")
+                    remaining_segments = [current_segment, *remaining_segments]
+                
+                return active_root_node, remaining_segments
 
             # Handle concatenation if necessary
-            if not self.ignore_empty_folders and len(remaining_segments) >= 1:
+            if not self.ignore_empty_folders and len(remaining_segments) > 0:
                 next_segment = remaining_segments.pop(0)
                 concat_segment = f"{current_segment}/{next_segment}"
                 remaining_segments.insert(0, concat_segment)
@@ -246,13 +241,14 @@ class Router:
 
             # If no route is found and concatenation isn't possible, exit
             print(f"Cannot concatenate segments or ignore_empty_folders=True. Exiting loop.")
-            return None, remaining_segments, active_parent
+            return None, remaining_segments
 
         # After processing all segments, return the active_root_node and active_parent if set
         if active_root_node:
-            return active_root_node, remaining_segments, active_parent
+            print('Return root node: ', current_segment)
+            return active_root_node, remaining_segments
 
-        return None, remaining_segments, active_parent
+        return None, remaining_segments
 
 
             
@@ -261,7 +257,6 @@ class Router:
         current_node: PageNode,
         segments: List[str],
         parent_variables: Dict[str, str],
-        parent_segment: str,
         query_params: Dict[str, any],
         loading_state: Dict[str, bool]
     ) -> Optional[ExecNode]:
@@ -275,99 +270,67 @@ class Router:
         :param query_params: Query parameters from the URL.
         :return: An ExecNode representing the root of the execution tree, or None if not found.
         """
-        if not current_node:
-            return None
         
         current_variables = parent_variables.copy()
-        current_segment = segments.pop(0) if segments else None
-        if current_node.path_template and current_segment:
+        next_segment = segments[0] if segments else None
+        
+        # handle path template
+        if current_node.path_template and next_segment:
             varname = current_node.path_template.strip('<>')
-            path_variable = current_segment
-            current_segment = segments.pop(0) if segments else None
-            current_variables[varname] = path_variable
-            print(f"Extracted variable: {varname} = {current_segment}")
+            current_variables[varname] = next_segment
+            print(f"Extracted variable: {varname} = {next_segment}")
+            segments = segments[1:]
+            next_segment = segments[0] if segments else None
 
         exec_node = ExecNode(
             layout=current_node.layout,
             segment=current_node.segment,
-            parent_segment=parent_segment,
+            parent_segment=current_node.parent_segment,
             variables=current_variables,
-            loading_state=loading_state
+            loading_state=loading_state,
         )
 
-        # If there are no more segments, process slots if any
-        # if not current_segment:
-        #     if current_node.slots:
-        #         for slot_segment, slot_node in current_node.slots.items():
-        #             print(f"Processing slot: {slot_segment}")
-        #             # Slots may have their own path and view templates
-        #             child_exec_node = self.build_execution_tree(
-        #                 current_node=slot_node,
-        #                 segments=segments.copy(),  # No additional segments
-        #                 parent_segment=parent_segment,
-        #                 loading_state=loading_state,
-        #                 parent_variables=current_variables,  # Inherit variables
-        #                 query_params=query_params
-        #             )
-        #             if child_exec_node:
-        #                 exec_node.slots[slot_segment] = child_exec_node
-        #             else:
-        #                 print(f"Slot '{slot_segment}' could not be processed.")  
-        #     return exec_node
+        IS_MATCHED = False
 
-        # Handle parallel routes (views)
+        # Handle parallel routes
         if current_node.view_template:
 
             varname = current_node.view_template.strip('[]')
-            view_segment = current_segment
-            view_node = current_node.parallel_routes.get(view_segment)
+            view_node = current_node.parallel_routes.get(next_segment)
 
             if not view_node:
-                print(f"No matching view for segment: {view_segment}")
+                print(f"No matching view for segment: {next_segment}")
                 exec_node.views[varname] = None
-                return exec_node  
-
-
-            print(f"Traversing to view: {view_segment} with segments left: {segments} and template: {view_node.path_template}")
-            # Pass down the current_variables to the child
-            print('PARENT: ', parent_segment, 'BECOMES PARENT: ', current_node.segment)
-            child_exec_node = self.build_execution_tree(
-                current_node=view_node,
-                segments=segments.copy(),
-                parent_segment=current_node.segment,
-                loading_state=loading_state,
-                parent_variables=current_variables,
-                query_params=query_params
-            )
-            if child_exec_node:
-                exec_node.views[varname] = child_exec_node
-                print('Found View node: ', view_segment)
+            
             else:
-                exec_node.views[varname] = None
-                return exec_node
-               
-        # Handle slots when there are still segments
-        elif current_node.slots and current_segment:
-            for slot_name, slot_node in current_node.slots:
-                print(f"Traversing to slot: {slot_name}")
-
+                print(f"Traversing to view: {next_segment} with segments left: {segments} and template: {view_node.path_template}")
                 # Pass down the current_variables to the child
+                print('PARENT: ', current_node.parent_segment, 'BECOMES PARENT: ', current_node.segment)
+                segments = segments[1:]
                 child_exec_node = self.build_execution_tree(
-                    current_node=slot_node,
+                    current_node=view_node,
                     segments=segments.copy(),
-                    parent_segment=current_node.segment,
                     loading_state=loading_state,
                     parent_variables=current_variables,
                     query_params=query_params
                 )
-                if child_exec_node:
-                    exec_node.slots[slot_name] = child_exec_node
-                else:
-                    print(f"Slot '{slot_name}' not found.")
-                    return None
-            else:
-                print(f"No matching slot for segment: {slot_name}")
-                return None
+
+                exec_node.views[varname] = child_exec_node
+                IS_MATCHED = True
+
+        if current_node.slots:
+            for slot_name, slot_node in current_node.slots.items():
+                print(f"Traversing to slot: {slot_name} with var: {segments}")
+
+                slot_exec_node = self.build_execution_tree(
+                    current_node=slot_node,
+                    segments=segments.copy(),
+                    parent_variables=current_variables,
+                    loading_state=loading_state,
+                    query_params=query_params
+                )
+                
+                exec_node.slots[slot_name] = slot_exec_node
         
         return exec_node
 
@@ -410,16 +373,15 @@ class Router:
                 
                 # segment wise tree search 
                 init_segments = [segment for segment in pathname_.strip('/').split('/') if segment]
-                root_segment = init_segments[0]
-                active_root_node, remaining_segments, active_root_parent = self._get_root_node(init_segments, loading_state_)
-                print('Active root parent: ', active_root_parent)   
+                active_root_node, remaining_segments = self._get_root_node(init_segments, loading_state_)
+                print('rem segments: ', remaining_segments)
+                # print('Active root parent: ', active_root_parent)   
                 if not active_root_node:
                     return html.H1('404 - Page not found'), {}
 
                 exec_tree = self.build_execution_tree(
                     current_node=active_root_node,
                     segments=remaining_segments,
-                    parent_segment=active_root_parent,
                     parent_variables={},  # Start with empty variables
                     query_params=query_parameters,
                     loading_state=loading_state_
@@ -434,8 +396,11 @@ class Router:
             
 
                 # if we dont render the root segment we use setprops to insert into the parent
-                if active_root_parent:
-                    set_props(ChildPageContainer.ids.container(active_root_parent), {'children': final_layout})
+                if active_root_node.parent_segment != '/':
+                    set_props(
+                        ChildContainer.ids.container(active_root_node.parent_segment), 
+                        {'children': final_layout}
+                    )
                     return no_update, new_loading_state
 
                 # Execute the tree to get the final layout

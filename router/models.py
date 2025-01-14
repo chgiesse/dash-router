@@ -1,4 +1,4 @@
-from .components import ChildPageContainer
+from .components import ChildContainer, SlotContainer
 
 from pydantic import BaseModel, Field, field_validator, ValidationError
 from dataclasses import dataclass, field
@@ -87,12 +87,15 @@ class PageNode(BaseModel):
 
 
     def get_child_node(self, segment: str):
-
+        
+        # only parallel routes can be matched directly
         if view_node := self.parallel_routes.get(segment):
             return view_node
 
-        if slot_node := self.slots.get(segment):
-            return slot_node
+        # if now parallel route is found, search slots for view or path templates
+        for slot_name, slot_node in self.slots.items():
+            if slot_node.path_template:
+                return slot_node
         
     
     def load_config(self, config: RouteConfig):
@@ -153,7 +156,11 @@ class ExecNode:
         # If layout is a callable (function), call it with the combined_kwargs
         if callable(self.layout):
             try:
-                layout = await self.layout(**combined_kwargs) if asyncio.iscoroutinefunction(self.layout) else self.layout(**combined_kwargs)
+                layout = (
+                    await self.layout(**combined_kwargs) 
+                    if asyncio.iscoroutinefunction(self.layout) 
+                    else self.layout(**combined_kwargs)
+                )
                 self.loading_state[self.segment] = True
 
             except Exception as e:
@@ -174,13 +181,19 @@ class ExecNode:
             executables = [slot.execute() for slot in self.slots.values()]
             # Execute all slots concurrently
             results = await asyncio.gather(*executables)
+
             # Map slot keys to their rendered components
-            return dict(zip(self.slots.keys(), results))
+            return {
+                slot_name: SlotContainer(slot_layout, self.parent_segment, slot_name) 
+                for slot_name, slot_layout 
+                in zip(self.slots.keys(), results)
+            }
+        
         return {}
 
     async def _handle_views(self) -> Dict[str, Component]:
         """
-        Executes all view nodes and gathers their rendered components.
+        Executes the current view node.
         """
         if self.views:
             # Create a list of coroutine tasks for all views
@@ -188,6 +201,7 @@ class ExecNode:
             # Execute all views concurrently
             layout = await view_node.execute() if view_node else None
             # Map view keys to their rendered components
-            return {view_template: ChildPageContainer(layout, self.parent_segment or self.segment)} 
+            layout_index_segment = self.segment if self.parent_segment == '/' else self.parent_segment
+            return {view_template: ChildContainer(layout, layout_index_segment)} 
 
         return {}

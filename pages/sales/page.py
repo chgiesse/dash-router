@@ -10,7 +10,6 @@ config = RouteConfig(
 
 
 async def layout(sales_sub_view = None, **kwargs):
-    print('sales_sub_view', sales_sub_view, flush=True)
     tab = kwargs.get('child_segment', 'overview')
     return dmc.Stack(
         m=0,

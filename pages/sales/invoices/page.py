@@ -7,7 +7,12 @@ async def layout(invoice = None, **kwargs):
     return dmc.SimpleGrid(
         cols=2,
         children=[
-            dmc.Title('Invoices'),
-            dmc.Text(invoice or 'This is the invoice section')
+            dmc.Stack([
+                dmc.Title('Invoices'),
+                dmc.Anchor(href='/sales/invoices/1', children='invoice id: 1'),
+                dmc.Anchor(href='/sales/invoices/2', children='invoice id: 2'),
+                dmc.Anchor(href='/sales/invoices/3', children='invoice id: 3'),
+            ]),
+            invoice
         ]
     )
