@@ -1,25 +1,17 @@
-from ._components.tabs import SalesTabs 
+import dash_mantine_components as dmc
+
 from router import RouteConfig
+from router.components import ChildContainer
 
-import dash_mantine_components as dmc 
+from ._components.tabs import SalesTabs
 
-
-config = RouteConfig(
-    view_template='[sales_sub_view]'
-)
+config = RouteConfig(view_template="[sales_sub_view]")
 
 
-async def layout(sales_sub_view = None, **kwargs):
-    tab = kwargs.get('child_segment', 'overview')
+async def layout(sales_sub_view: ChildContainer = None, **kwargs):
+    tab = sales_sub_view.props.active if sales_sub_view else "overview"
     return dmc.Stack(
         m=0,
         p=0,
-        children=[
-            dmc.Title('Sales'),
-            SalesTabs(tab),
-            dmc.Divider(),
-            sales_sub_view
-        ]
+        children=[dmc.Title("Sales"), SalesTabs(tab), dmc.Divider(), sales_sub_view],
     )
-
-

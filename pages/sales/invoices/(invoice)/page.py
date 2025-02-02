@@ -1,10 +1,13 @@
-from router import RouteConfig
 from dash import html
 
-config = RouteConfig(
-    path_template='<invoice_id>'
-)
+from router import RouteConfig
 
-async def layout(invoice_id = None, **kwargs):
-    return html.Div(str(invoice_id))
-    
+config = RouteConfig(path_template="<invoice_id>")
+
+
+async def layout(invoice_id=None, **kwargs):
+    if invoice_id:
+        return html.Div(str(invoice_id))
+
+    return html.Div("Select an invoice")
+
