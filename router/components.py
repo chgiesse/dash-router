@@ -48,19 +48,14 @@ class RootContainer(html.Div):
         location = "dash-router-location"
         state_store = "dash-router-loading-state-store"
         dummy = "dash-router-dummy-container"
-        slot_dummy = SlotContainer.ids.container("root", "dummy")
-        view_dummy = ChildContainer.ids.container("dummy")
 
     def __init__(self) -> None:
         super().__init__(
             [
-                html.Button("TEST TEST", id="click"),
                 dcc.Location(id=self.ids.location),
                 html.Div(id=self.ids.container, disable_n_clicks=True),
                 dcc.Store(id=self.ids.state_store, data={}),
                 html.Div(id=self.ids.dummy, disable_n_clicks=True),
-                html.Div(id=self.ids.slot_dummy, disable_n_clicks=True),
-                html.Div(id=self.ids.view_dummy, disable_n_clicks=True),
             ]
         )
 

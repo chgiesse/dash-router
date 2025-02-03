@@ -1,22 +1,39 @@
 # from dataclasses import dataclass
 import importlib
+import json
 import os
 import traceback
 from typing import Dict, List, Optional, Tuple, Union
 
 from dash import Dash, html
 from dash._get_paths import app_strip_relative_path
-from flash import Flash, Input, Output, State, no_update, set_props
+from dash._utils import inputs_to_vals
 
 # from dash.development.base_component import Component
+from flash import Flash, Input, Output, State
 from flash._pages import _parse_path_variables, _parse_query_string
-from quart import request
+from quart import Response, request
 
 from .components import ChildContainer, RootContainer, SlotContainer
 from .models import ExecNode, PageNode, RootNode, RouteConfig
 
 # from dataclasses import dataclass, field
 # import asyncio
+
+
+def recursive_to_plotly_json(component):
+    if hasattr(component, "to_plotly_json"):
+        component = component.to_plotly_json()
+        children = component["props"].get("children")
+
+        if isinstance(children, list):
+            component["props"]["children"] = [
+                recursive_to_plotly_json(child) for child in children
+            ]
+        else:
+            component["props"]["children"] = recursive_to_plotly_json(children)
+
+    return component
 
 
 class Router:
@@ -391,6 +408,137 @@ class Router:
         return exec_node
 
     def setup_router(self):
+        @self.app.server.before_request
+        async def router():
+            request_data = await request.get_data()
+            response = Response(mimetype="application/json")
+
+            if not request_data:
+                return
+
+            body = json.loads(request_data)
+            changed_prop = body["changedPropIds"]
+
+            # I expect '[dash-router-location.pathname]'
+            changed_prop_id = changed_prop[0].split(".")[0] if changed_prop else None
+
+            # Pass if the current request is not by our location
+            if changed_prop_id != RootContainer.ids.location:
+                return
+
+            inputs = body.get("inputs", [])
+            state = body.get("state", [])
+
+            args = inputs_to_vals(inputs + state)
+
+            pathname_, search_, loading_state_ = args
+
+            query_parameters = _parse_query_string(search_)
+
+            # Handle root path specially
+            if pathname_ == "/" or not pathname_:
+                node = self.route_registry.get_route("/")
+                layout = await node.layout(**query_parameters)
+                return {
+                    "multi": True,
+                    "response": {
+                        RootContainer.ids.container: {
+                            "children": recursive_to_plotly_json(layout)
+                        },
+                    },
+                }
+
+            path = self.strip_relative_path(pathname_)
+
+            # handle roote and check for static routes
+            static_route, path_variables = self.get_static_route(path)
+
+            if static_route:
+                layout = await static_route.layout(
+                    **query_parameters, **path_variables or {}
+                )
+
+                return {
+                    "multi": True,
+                    "response": {
+                        RootContainer.ids.container: {
+                            "children": recursive_to_plotly_json(layout)
+                        },
+                    },
+                }
+
+            # segment wise tree search
+            init_segments = [
+                segment for segment in pathname_.strip("/").split("/") if segment
+            ]
+
+            active_root_node, remaining_segments = self._get_root_node(
+                init_segments, loading_state_
+            )
+
+            # print('Active root parent: ', active_root_parent)
+            if not active_root_node:
+                return {
+                    "multi": True,
+                    "response": {
+                        RootContainer.ids.container: {
+                            "children": recursive_to_plotly_json(
+                                html.H1("404 - Page not found")
+                            )
+                        },
+                    },
+                }
+
+            exec_tree = self.build_execution_tree(
+                current_node=active_root_node,
+                segments=remaining_segments,
+                parent_variables={},  # Start with empty variables
+                query_params=query_parameters,
+                loading_state=loading_state_,
+            )
+
+            if not exec_tree:
+                return html.H1("404 - Page not found"), {}
+
+            final_layout = await exec_tree.execute()
+
+            # clean loading store
+            new_loading_state = {
+                segment: state
+                for segment, state in exec_tree.loading_state.items()
+                if segment in init_segments
+            }
+
+            new_loading_state["raw_path"] = active_root_node.path.split("/")
+            print("Render Root: ", active_root_node)
+
+            # print("ARGS: ", args, flush=True)
+
+            container_id = RootContainer.ids.container
+
+            if active_root_node.parent_segment != "/":
+                if active_root_node.is_slot:
+                    container_id = json.dumps(
+                        SlotContainer.ids.container(
+                            active_root_node.parent_segment,
+                            active_root_node.segment,
+                        )
+                    )
+
+                else:
+                    container_id = json.dumps(
+                        ChildContainer.ids.container(
+                            active_root_node.parent_segment,
+                        )
+                    )
+
+            return {
+                "multi": True,
+                "response": {
+                    container_id: {"children": recursive_to_plotly_json(final_layout)},
+                },
+            }
+
         @self.app.server.before_serving
         async def trigger_router():
             inputs = {
@@ -402,107 +550,9 @@ class Router:
             inputs.update(self.app.routing_callback_inputs)
 
             @self.app.callback(
-                Output(RootContainer.ids.container, "children"),
-                Output(RootContainer.ids.state_store, "data"),
-                inputs=inputs,
+                Output(RootContainer.ids.dummy, "children"), inputs=inputs
             )
             async def update(
                 pathname_: str, search_: str, loading_state_: str, **states
             ):
-                request_data = await request.get_data()
-
-                print("REQUEST DATA IN ROUTER: ", request_data, flush=True)
-
-                query_parameters = _parse_query_string(search_)
-
-                # Handle root path specially
-                if pathname_ == "/" or not pathname_:
-                    node = self.route_registry.get_route("/")
-                    layout = await node.layout(**states, **query_parameters)
-                    return layout, no_update
-
-                path = self.strip_relative_path(pathname_)
-
-                # handle roote and check for static routes
-                static_route, path_variables = self.get_static_route(path)
-
-                if static_route:
-                    return await static_route.layout(
-                        **query_parameters, **path_variables or {}
-                    ), {}
-
-                # segment wise tree search
-                init_segments = [
-                    segment for segment in pathname_.strip("/").split("/") if segment
-                ]
-                active_root_node, remaining_segments = self._get_root_node(
-                    init_segments, loading_state_
-                )
-
-                # print('Active root parent: ', active_root_parent)
-                if not active_root_node:
-                    return html.H1("404 - Page not found"), {}
-
-                exec_tree = self.build_execution_tree(
-                    current_node=active_root_node,
-                    segments=remaining_segments,
-                    parent_variables={},  # Start with empty variables
-                    query_params=query_parameters,
-                    loading_state=loading_state_,
-                )
-
-                if not exec_tree:
-                    return html.H1("404 - Page not found"), {}
-
-                final_layout = await exec_tree.execute()
-                # clean loading store
-                new_loading_state = {
-                    segment: state
-                    for segment, state in exec_tree.loading_state.items()
-                    if segment in init_segments
-                }
-                new_loading_state["raw_path"] = active_root_node.path.split("/")
-                print("Render Root: ", final_layout)
-                # print(new_loading_state)
-
-                # if we dont render the root segment we use setprops to insert into the parent
-
-                if active_root_node.parent_segment != "/":
-                    if active_root_node.is_slot:
-                        container_id = SlotContainer.ids.container(
-                            active_root_node.parent_segment,
-                            active_root_node.segment,
-                        )
-                        print("Set props slot", container_id)
-                        set_props(
-                            {
-                                "type": "DASH-ROUTER-SLOT-ROUTE-CONTAINER",
-                                "index": "invoices-slot-overview",
-                            },
-                            {"children": "fuck you"},
-                        )
-                        set_props(
-                            container_id,
-                            {
-                                "children": final_layout,
-                            },
-                        )
-
-                    else:
-                        print(
-                            "Set props view",
-                            ChildContainer.ids.container(
-                                active_root_node.parent_segment
-                            ),
-                        )
-                        set_props(
-                            ChildContainer.ids.container(
-                                active_root_node.parent_segment
-                            ),
-                            {"children": final_layout},
-                        )
-
-                    return no_update, new_loading_state
-
-                # Execute the tree to get the final layout
-                return final_layout, new_loading_state
+                return
