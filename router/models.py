@@ -142,13 +142,10 @@ class ExecNode:
         Executes the node by rendering its layout with the provided variables,
         slots, and views.
         """
-        # print('EXECUTE: ', self.segment, self.__dict__)
         slots_content = await self._handle_slots()
         views_content = await self._handle_views()
 
-        # Combine variables, slots, and views into a single dictionary
         combined_kwargs = {**self.variables, **slots_content, **views_content}
-        # If layout is a callable (function), call it with the combined_kwargs
         if callable(self.layout):
             try:
                 layout = (
@@ -162,7 +159,6 @@ class ExecNode:
 
             return layout
 
-        # If layout is a Dash Component, return it directly
         return self.layout
 
     async def _handle_slots(self) -> Dict[str, Component]:
@@ -192,11 +188,8 @@ class ExecNode:
         Executes the current view node.
         """
         if self.views:
-            # Create a list of coroutine tasks for all views
             view_template, view_node = next(iter(self.views.items()))
-            # Execute all views concurrently
             layout = await view_node.execute() if view_node else None
-            # Map view keys to their rendered components
             layout_index_segment = (
                 self.segment if self.parent_segment == "/" else self.parent_segment
             )
@@ -208,3 +201,9 @@ class ExecNode:
             }
 
         return {}
+
+
+class RouterResponse(BaseModel):
+    mimetype: str = "application/json"
+    multi: bool = False
+    response: Dict[str, any]
