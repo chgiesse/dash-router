@@ -166,9 +166,7 @@ class ExecNode:
         Executes all slot nodes and gathers their rendered components.
         """
         if self.slots:
-            # Create a list of coroutine tasks for all slots
             executables = [slot.execute() for slot in self.slots.values()]
-            # Execute all slots concurrently
             views = await asyncio.gather(*executables)
             results = {}
 
@@ -204,6 +202,9 @@ class ExecNode:
 
 
 class RouterResponse(BaseModel):
+    response: Dict[str, any]
     mimetype: str = "application/json"
     multi: bool = False
-    response: Dict[str, any]
+
+    class Config:
+        arbitrary_types_allowed = True
