@@ -185,10 +185,7 @@ class Router:
                 continue
 
             if root_page.path_template:
-                template_id = os.path.join(
-                    root_page.path, root_page.path_template
-                ).strip("/")
-                path_variables = _parse_path_variables(path, template_id)
+                path_variables = _parse_path_variables(path, root_page.path)
                 if path_variables:
                     return root_page, path_variables
 
@@ -231,7 +228,14 @@ class Router:
             if next_node:
                 active_root_node = next_node
 
+                # Handle path templates, the current setup supports two kind of path templates in the end
+                # which need to be delt differently.
+                # if next_node.path_template:
+
                 if next_node.path_template and len(remaining_segments) == 1:
+                    if next_node.segment == current_segment:
+                        return next_node, []
+
                     return active_root_node, remaining_segments
 
                 remaining_segments.pop(0)
@@ -392,6 +396,11 @@ class Router:
             active_root_node, remaining_segments = self._get_root_node(
                 init_segments, loading_state_
             )
+
+            print("_________________", flush=True)
+            print("Pathname: ", pathname_, flush=True)
+            print("Update segments: ", remaining_segments, flush=True)
+            print("Active Root Node: ", active_root_node, flush=True)
 
             if not active_root_node:
                 return {
