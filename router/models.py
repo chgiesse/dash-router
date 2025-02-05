@@ -68,6 +68,7 @@ class PageNode(BaseModel):
     is_static: bool = True
     is_root: bool | None = None
     child_nodes: Dict[str, "PageNode"] = Field(default_factory=dict)
+    default_child: str | None = None
     slots: Dict[str, "PageNode"] = Field(default_factory=dict)
     is_loading: Callable | Component | None = None
     on_error: Callable | Component | None = None
@@ -109,6 +110,7 @@ class PageNode(BaseModel):
         # self.redirect_from = config.redirect_from
         # self.has_slots = config.has_slots
         self.view_template = config.view_template
+        self.default_child = config.default_child
 
 
 class RootNode(BaseModel):
@@ -125,7 +127,6 @@ class RootNode(BaseModel):
         self.routes[node.path] = node
 
     def get_route(self, path: str) -> PageNode:
-        print("Try to get: ", path, flush=True)
         return self.routes.get(path, None)
 
 
@@ -139,7 +140,7 @@ class ExecNode:
     loading_state: Dict[str, bool]
     variables: Dict[str, str] = field(default_factory=dict)
     slots: Dict[str, "ExecNode"] = field(default_factory=dict)
-    views: Dict[str, "ExecNode"] = field(default_factory=dict)
+    child_node: Dict[str, "ExecNode"] = field(default_factory=dict)
     path_template: Optional[str] = None
 
     async def execute(self) -> Component:
@@ -199,12 +200,12 @@ class ExecNode:
         """
         Executes the current view node.
         """
-        if self.views:
-            view_template, view_node = next(iter(self.views.items()))
-            layout = await view_node.execute() if view_node else None
+        if self.child_node:
+            _, child_node = next(iter(self.child_node.items()))
+            layout = await child_node.execute() if child_node else None
             return {
                 "children": ChildContainer(
-                    layout, self.segment, view_node.segment if view_node else None
+                    layout, self.segment, child_node.segment if child_node else None
                 )
             }
 

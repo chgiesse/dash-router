@@ -2,25 +2,21 @@ import dash_mantine_components as dmc
 from dash import html
 
 from router import RouteConfig
+from router.components import ChildContainer
 
-config = RouteConfig(path_template="<invoice_id>")
+from ._components.tabs import InvoiceTabs
+
+config = RouteConfig(path_template="<invoice_id>", default_child="items")
 
 
-async def layout(invoice_id=None, children=None, **kwargs):
+async def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
     if not invoice_id:
         return html.Div("Select an invoice")
 
     return dmc.Stack(
         [
             html.Div("Invoice ID: " + str(invoice_id)),
-            dmc.Anchor(
-                href=f"/sales/invoices/{str(invoice_id)}/items",
-                children="invoice id: 1",
-            ),
-            dmc.Anchor(
-                href=f"/sales/invoices/{str(invoice_id)}/positions",
-                children="invoice id: 2",
-            ),
+            InvoiceTabs(children.props.active, invoice_id),
             dmc.Divider(),
             html.Div(children),
         ]

@@ -1,9 +1,10 @@
+import dash_mantine_components as dmc
+
 from router import RouteConfig
-import dash_mantine_components as dmc 
 
-
-config = RouteConfig(has_slots=True)
+config = RouteConfig()
 
 
 async def layout(**kwargs):
-    return dmc.Title('RV Risk')
+    return dmc.Title("RV Risk")
+

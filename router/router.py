@@ -12,7 +12,7 @@ from dash._utils import inputs_to_vals
 # from dash.development.base_component import Component
 from flash import Flash, Input, Output, State
 from flash._pages import _parse_path_variables, _parse_query_string
-from quart import Response, request
+from quart import request
 
 from ._utils import create_pathtemplate_key, recursive_to_plotly_json
 from .components import ChildContainer, RootContainer, SlotContainer
@@ -32,6 +32,8 @@ class Router:
     ) -> None:
         self.app = app
         self.route_registry = RootNode()
+        self.static_routes = RootNode()
+        self.dynamic_routes = RootNode()
         self.requests_pathname_prefix = requests_pathname_prefix
         self.ignore_empty_folders = ignore_empty_folders
         self.pages_folder = app.pages_folder if app.pages_folder else pages_folder
@@ -179,12 +181,9 @@ class Router:
         active_root_node = None
 
         while remaining_segments:
-            print("Loaded: ", updated_segments, variables, flush=True)
-            print("compare: ", remaining_segments, flush=True)
             current_segment = remaining_segments[0]
 
             if not active_root_node:
-                print("ROUTES TREE: ", self.route_registry.routes, flush=True)
                 active_root_node = self.route_registry.get_route(current_segment)
 
                 if not active_root_node:
@@ -203,12 +202,6 @@ class Router:
                 remaining_segments.pop(0)
 
                 if not loading_state.get(loading_state_key, False):
-                    print(
-                        "segment: ",
-                        loading_state_key,
-                        "is not loaded as root",
-                        flush=True,
-                    )
                     return (
                         active_root_node,
                         remaining_segments,
@@ -243,7 +236,6 @@ class Router:
 
             active_root_node = current_node
             if not loading_state.get(loading_state_key, False):
-                print("segment: ", loading_state_key, "is not loaded", flush=True)
                 if current_node.segment == loading_state_key:
                     remaining_segments.pop(0)
 
@@ -276,7 +268,6 @@ class Router:
         current_variables = parent_variables.copy()
         next_segment = segments[0] if segments else None
 
-        # handle path template
         if current_node.path_template and next_segment:
             varname = current_node.path_template.strip("<>")
             current_variables[varname] = next_segment
@@ -292,28 +283,31 @@ class Router:
             path_template=current_node.path_template,
         )
 
-        # Handle parallel routes
         if current_node.child_nodes:
             child_node = current_node.child_nodes.get(next_segment)
 
             if not child_node:
-                exec_node.views["children"] = None
+                default_segment = current_node.default_child
+                child_node = current_node.child_nodes.get(default_segment, None)
 
-            else:
-                # Pass down the current_variables to the child
-                segments = segments[1:]
-                child_exec_node = self.build_execution_tree(
+            # Pass down the current_variables to the child
+            segments = segments[1:]
+            child_exec_node = (
+                self.build_execution_tree(
                     current_node=child_node,
                     segments=segments.copy(),
                     loading_state=loading_state,
                     parent_variables=current_variables,
                     query_params=query_params,
                 )
+                if child_node
+                else None
+            )
 
-                exec_node.views["children"] = child_exec_node
+            exec_node.child_node["children"] = child_exec_node
 
-                if not segments:
-                    return exec_node
+            if not segments:
+                return exec_node
 
         if current_node.slots:
             for slot_name, slot_node in current_node.slots.items():
@@ -336,7 +330,6 @@ class Router:
         @self.app.server.before_request
         async def router():
             request_data = await request.get_data()
-            response = Response(mimetype="application/json")
 
             if not request_data:
                 return
@@ -373,12 +366,10 @@ class Router:
                     },
                 }
 
-            print("_________________", flush=True)
             path = self.strip_relative_path(pathname_)
 
             # handle roote and check for static routes
             static_route, path_variables = self.get_static_route(path)
-            print("static_route: ", static_route, flush=True)
             if static_route:
                 layout = await static_route.layout(
                     **query_parameters, **path_variables or {}
@@ -398,16 +389,9 @@ class Router:
                 segment for segment in pathname_.strip("/").split("/") if segment
             ]
 
-            print(init_segments, flush=True)
-
             active_root_node, remaining_segments, updated_segments, path_variables = (
                 self._get_root_node(init_segments, loading_state_)
             )
-
-            # print("Pathname: ", pathname_, flush=True)
-            print("Update segments: ", path_variables, flush=True)
-            print("Active Root Node: ", active_root_node, flush=True)
-            # print("Loading State: ", loading_state_)
 
             if not active_root_node:
                 return {

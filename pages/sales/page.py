@@ -10,7 +10,6 @@ config = RouteConfig(default_child="overview")
 
 async def layout(children: ChildContainer = None, **kwargs):
     tab = children.props.active
-    print("TAB: ", tab, flush=True)
     return dmc.Stack(
         m=0,
         p=0,
