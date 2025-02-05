@@ -210,6 +210,10 @@ class Router:
 
             if not active_root_node:
                 active_root_node = self.route_registry.get_route(current_segment)
+
+                if not active_root_node:
+                    return None, [], {}, {}
+
                 loading_state_key = (
                     create_pathtemplate_key(
                         active_root_node.segment,
@@ -264,14 +268,6 @@ class Router:
             active_root_node = current_node
             if not loading_state.get(loading_state_key, False):
                 print("segment: ", loading_state_key, "is not loaded", flush=True)
-                # if not current_node.path_template:
-                #     return (
-                #         active_root_node,
-                #         remaining_segments,
-                #         updated_segments,
-                #         variables,
-                #     )
-
                 if current_node.segment == loading_state_key:
                     remaining_segments.pop(0)
 
@@ -301,16 +297,6 @@ class Router:
         query_params: Dict[str, any],
         loading_state: Dict[str, bool],
     ) -> Optional[ExecNode]:
-        """
-        Recursively builds the execution tree based on the URL segments.
-
-        :param current_node: The current PageNode being processed.
-        :param segments: The remaining URL path segments to process.
-        :param loading_state: Current loading state to handle async operations.
-        :param query_params: Query parameters from the URL.
-        :return: An ExecNode representing the root of the execution tree, or None if not found.
-        """
-
         current_variables = parent_variables.copy()
         next_segment = segments[0] if segments else None
 
