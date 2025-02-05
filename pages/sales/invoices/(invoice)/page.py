@@ -3,10 +3,10 @@ from dash import html
 
 from router import RouteConfig
 
-config = RouteConfig(path_template="<invoice_id>", view_template="[invoice_child]")
+config = RouteConfig(path_template="<invoice_id>")
 
 
-async def layout(invoice_id=None, invoice_child=None, **kwargs):
+async def layout(invoice_id=None, children=None, **kwargs):
     if not invoice_id:
         return html.Div("Select an invoice")
 
@@ -22,6 +22,6 @@ async def layout(invoice_id=None, invoice_child=None, **kwargs):
                 children="invoice id: 2",
             ),
             dmc.Divider(),
-            html.Div(invoice_child),
+            html.Div(children),
         ]
     )

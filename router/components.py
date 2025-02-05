@@ -13,13 +13,17 @@ class ChildContainer(html.Div):
         active = None
 
     def __init__(
-        self, layout: Component, segment: str, child_name: str = None, *args, **kwargs
+        self,
+        layout: Component,
+        parent_segment: str,
+        segment: str = None,
+        *args,
+        **kwargs,
     ):
-        self.props.active = child_name
-        print("set active props: ", self.props.active, flush=True)
+        self.props.active = segment
 
         super().__init__(
-            id=self.ids.container(segment), children=layout, *args, **kwargs
+            id=self.ids.container(parent_segment), children=layout, *args, **kwargs
         )
 
 
@@ -34,14 +38,15 @@ class SlotContainer(html.Div):
         active = None
 
     def __init__(
-        self, layout: Component, segment: str, slot_name: str, *args, **kwargs
+        self, layout: Component, parent_segment: str, slot_name: str, *args, **kwargs
     ):
-        self.props.active = slot_name
-
-        print("set active props: ", self.props.active, flush=True)
+        self.props.active = parent_segment
 
         super().__init__(
-            id=self.ids.container(segment, slot_name), children=layout, *args, **kwargs
+            id=self.ids.container(parent_segment, slot_name),
+            children=layout,
+            *args,
+            **kwargs,
         )
 
 

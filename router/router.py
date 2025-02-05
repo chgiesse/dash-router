@@ -14,27 +14,12 @@ from flash import Flash, Input, Output, State
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import Response, request
 
-from ._utils import create_pathtemplate_key
+from ._utils import create_pathtemplate_key, recursive_to_plotly_json
 from .components import ChildContainer, RootContainer, SlotContainer
 from .models import ExecNode, PageNode, RootNode, RouteConfig
 
 # from dataclasses import dataclass, field
 # import asyncio
-
-
-def recursive_to_plotly_json(component):
-    if hasattr(component, "to_plotly_json"):
-        component = component.to_plotly_json()
-        children = component["props"].get("children")
-
-        if isinstance(children, list):
-            component["props"]["children"] = [
-                recursive_to_plotly_json(child) for child in children
-            ]
-        else:
-            component["props"]["children"] = recursive_to_plotly_json(children)
-
-    return component
 
 
 class Router:
@@ -79,9 +64,7 @@ class Router:
         dir_has_page = "page.py" in entries
 
         if dir_has_page:
-            new_node = self.load_route_module(
-                current_dir, segment, current_node.segment
-            )
+            new_node = self.load_route_module(current_dir, segment, current_node)
             # Set the path based on the directory structure
             if current_dir == self.pages_folder:
                 new_node.path = "/"
@@ -100,21 +83,14 @@ class Router:
                 )
 
                 new_node.path = relative_path
-
-                register_at_root = True
-
-                if isinstance(current_node, PageNode):
-                    if current_node.view_template:
-                        current_node.register_route(new_node)
-                        register_at_root = False
-
-                    if new_node.is_slot:
-                        current_node.register_slot(new_node)
-                        register_at_root = False
-
                 # register static route
-                if register_at_root:
+                if new_node.is_static or new_node.is_root:
                     self.route_registry.register_root_route(new_node)
+
+                elif new_node.is_slot:
+                    current_node.register_slot(new_node)
+                else:
+                    current_node.register_route(new_node)
 
         # Process subdirectories
         for entry in sorted(entries):
@@ -129,15 +105,15 @@ class Router:
                 self._traverse_directory(current_dir, entry, next_node)
 
     def load_route_module(
-        self, current_dir: str, segment: str, parent_segment: str
+        self, current_dir: str, segment: str, parent_node: PageNode
     ) -> PageNode:
         module_path = os.path.join(current_dir, "page.py")
         module_path_parts = os.path.splitext(module_path)[0].split(os.sep)
         module_name = ".".join(module_path_parts)
 
         # Route is at top level when there is no parent or the parent is the root
-        is_root = parent_segment == "/" or not parent_segment
-        segment = "/" if not parent_segment else segment
+        is_root = parent_node.segment == "/" or not parent_node.segment
+        segment = "/" if not parent_node.segment else segment
 
         try:
             # Import the module
@@ -151,15 +127,14 @@ class Router:
 
             route_config: RouteConfig = getattr(page_module, "config", RouteConfig())
             is_slot = segment.startswith("(") and segment.endswith(")")
-            is_static = not is_slot and not route_config.view_template
 
             new_node = PageNode(
                 layout=layout,
                 segment=segment.strip("()"),
-                parent_segment=parent_segment,
+                parent_segment=parent_node.segment,
                 module=module_name,
                 is_slot=is_slot,
-                is_static=is_static,
+                is_static=route_config.is_static,
                 is_root=is_root,
             )
 
@@ -209,6 +184,7 @@ class Router:
             current_segment = remaining_segments[0]
 
             if not active_root_node:
+                print("ROUTES TREE: ", self.route_registry.routes, flush=True)
                 active_root_node = self.route_registry.get_route(current_segment)
 
                 if not active_root_node:
@@ -317,25 +293,24 @@ class Router:
         )
 
         # Handle parallel routes
-        if current_node.view_template:
-            varname = current_node.view_template.strip("[]")
-            view_node = current_node.parallel_routes.get(next_segment)
+        if current_node.child_nodes:
+            child_node = current_node.child_nodes.get(next_segment)
 
-            if not view_node:
-                exec_node.views[varname] = None
+            if not child_node:
+                exec_node.views["children"] = None
 
             else:
                 # Pass down the current_variables to the child
                 segments = segments[1:]
                 child_exec_node = self.build_execution_tree(
-                    current_node=view_node,
+                    current_node=child_node,
                     segments=segments.copy(),
                     loading_state=loading_state,
                     parent_variables=current_variables,
                     query_params=query_params,
                 )
 
-                exec_node.views[varname] = child_exec_node
+                exec_node.views["children"] = child_exec_node
 
                 if not segments:
                     return exec_node
@@ -403,7 +378,7 @@ class Router:
 
             # handle roote and check for static routes
             static_route, path_variables = self.get_static_route(path)
-
+            print("static_route: ", static_route, flush=True)
             if static_route:
                 layout = await static_route.layout(
                     **query_parameters, **path_variables or {}
@@ -422,6 +397,8 @@ class Router:
             init_segments = [
                 segment for segment in pathname_.strip("/").split("/") if segment
             ]
+
+            print(init_segments, flush=True)
 
             active_root_node, remaining_segments, updated_segments, path_variables = (
                 self._get_root_node(init_segments, loading_state_)
@@ -466,11 +443,6 @@ class Router:
 
             final_layout = await exec_tree.execute()
             new_loading_state = {**updated_segments, **exec_tree.loading_state}
-
-            # print("Exec loading state: ", exec_tree.loading_state, flush=True)
-            # print("updated segment: ", updated_segments, flush=True)
-            # new_loading_state["raw_path"] = active_root_node.path.split("/")
-
             container_id = RootContainer.ids.container
 
             if active_root_node.parent_segment != "/":

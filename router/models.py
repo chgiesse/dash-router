@@ -15,6 +15,7 @@ class RouteConfig(BaseModel):
     path_template: Optional[str] = None
     view_template: Optional[str] = None
     default_child: Optional[str] = None
+    is_static: bool = False
     has_slots: bool = False
     title: Optional[str] = None
     description: Optional[str] = None
@@ -66,7 +67,7 @@ class PageNode(BaseModel):
     is_slot: bool = False
     is_static: bool = True
     is_root: bool | None = None
-    parallel_routes: Dict[str, "PageNode"] = Field(default_factory=dict)
+    child_nodes: Dict[str, "PageNode"] = Field(default_factory=dict)
     slots: Dict[str, "PageNode"] = Field(default_factory=dict)
     is_loading: Callable | Component | None = None
     on_error: Callable | Component | None = None
@@ -84,12 +85,12 @@ class PageNode(BaseModel):
         if node.segment in self.slots:
             raise KeyError(f"{node.segment} is already registered as parallel route!!")
 
-        self.parallel_routes[node.segment] = node
+        self.child_nodes[node.segment] = node
 
     def get_child_node(self, segment: str):
         # only parallel routes can be matched directly
-        if view_node := self.parallel_routes.get(segment):
-            return view_node
+        if child_node := self.child_nodes.get(segment):
+            return child_node
 
         # if no parallel route is found, search slots for view or path templates
         for slot_name, slot_node in self.slots.items():
@@ -124,6 +125,7 @@ class RootNode(BaseModel):
         self.routes[node.path] = node
 
     def get_route(self, path: str) -> PageNode:
+        print("Try to get: ", path, flush=True)
         return self.routes.get(path, None)
 
 
@@ -201,7 +203,7 @@ class ExecNode:
             view_template, view_node = next(iter(self.views.items()))
             layout = await view_node.execute() if view_node else None
             return {
-                view_template: ChildContainer(
+                "children": ChildContainer(
                     layout, self.segment, view_node.segment if view_node else None
                 )
             }

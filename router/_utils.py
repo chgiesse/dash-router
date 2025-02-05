@@ -6,3 +6,18 @@ def create_pathtemplate_key(
         path_template_key = segment + filled_template
         return path_template_key
     return segment
+
+
+def recursive_to_plotly_json(component):
+    if hasattr(component, "to_plotly_json"):
+        component = component.to_plotly_json()
+        children = component["props"].get("children")
+
+        if isinstance(children, list):
+            component["props"]["children"] = [
+                recursive_to_plotly_json(child) for child in children
+            ]
+        else:
+            component["props"]["children"] = recursive_to_plotly_json(children)
+
+    return component

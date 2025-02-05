@@ -1,9 +1,10 @@
+import dash_mantine_components as dmc
+
 from router import RouteConfig
-import dash_mantine_components as dmc 
 
-
-config = RouteConfig(path_template='<cid>')
+config = RouteConfig(path_template="<cid>", is_static=True)
 
 
 async def layout(cid: str, **kwargs):
-    return dmc.Title(f'OM {cid}')
+    return dmc.Title(f"OM {cid}")
+
