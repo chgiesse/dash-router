@@ -5,7 +5,7 @@ from router.components import ChildContainer
 
 from ._components.tabs import SalesTabs
 
-config = RouteConfig(view_template="[sales_sub_view]")
+config = RouteConfig(view_template="[sales_sub_view]", default_child="overview")
 
 
 async def layout(sales_sub_view: ChildContainer = None, **kwargs):

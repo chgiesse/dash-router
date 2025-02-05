@@ -14,6 +14,7 @@ from flash import Flash, Input, Output, State
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import Response, request
 
+from ._utils import create_pathtemplate_key
 from .components import ChildContainer, RootContainer, SlotContainer
 from .models import ExecNode, PageNode, RootNode, RouteConfig
 
@@ -197,59 +198,89 @@ class Router:
     def _get_root_node(
         self, segments: List[str], loading_state: Dict[str, bool]
     ) -> Tuple[Optional["PageNode"], List[str], Optional[str]]:
-        """
-        Finds the root node of a dynamic route which gets traversed.
-        Now also returns the active parent segment.
-
-        :param segments: List of URL path segments.
-        :param loading_state: Dictionary indicating which segments should be skipped.
-        :return: A tuple containing the root PageNode (or None if not found),
-                the remaining segments, and the active parent segment (str or None).
-        """
         remaining_segments = segments.copy()
-        previous_segments = loading_state.pop("raw_path", [])
+        updated_segments = {}
+        variables = {}
         active_root_node = None
 
         while remaining_segments:
+            print("Loaded: ", updated_segments, variables, flush=True)
+            print("compare: ", remaining_segments, flush=True)
             current_segment = remaining_segments[0]
 
             if not active_root_node:
                 active_root_node = self.route_registry.get_route(current_segment)
+                loading_state_key = (
+                    create_pathtemplate_key(
+                        active_root_node.segment,
+                        active_root_node.path_template,
+                        current_segment,
+                        active_root_node.path_template.strip("<>"),
+                    )
+                    if active_root_node.path_template
+                    else current_segment
+                )
+                remaining_segments.pop(0)
+
+                if not loading_state.get(loading_state_key, False):
+                    print(
+                        "segment: ",
+                        loading_state_key,
+                        "is not loaded as root",
+                        flush=True,
+                    )
+                    return (
+                        active_root_node,
+                        remaining_segments,
+                        updated_segments,
+                        variables,
+                    )
+                updated_segments[loading_state_key] = True
+                continue
+
+            current_node = active_root_node.get_child_node(current_segment)
+
+            if not current_node:
+                if not self.ignore_empty_folders and len(remaining_segments) > 0:
+                    next_segment = remaining_segments.pop(0)
+                    concat_segment = f"{current_segment}/{next_segment}"
+                    remaining_segments.insert(0, concat_segment)
+                    continue
+
                 remaining_segments.pop(0)
                 continue
+            # handle loading state
+            loading_state_key = (
+                create_pathtemplate_key(
+                    current_node.segment,
+                    current_node.path_template,
+                    current_segment,
+                    current_node.path_template.strip("<>"),
+                )
+                if current_node.path_template
+                else current_segment
+            )
 
-            if loading_state.get(current_segment, False):
-                next_segment = remaining_segments.pop(0)
-                next_node = active_root_node.get_child_node(next_segment)
-                continue
+            if not loading_state.get(loading_state_key, False):
+                print("segment: ", loading_state_key, "is not loaded", flush=True)
+                return current_node, remaining_segments, updated_segments, variables
 
-            next_node = active_root_node.get_child_node(current_segment)
+            active_root_node = current_node
+            if current_node.path_template:
+                if len(remaining_segments) == 1:
+                    return (
+                        active_root_node,
+                        remaining_segments,
+                        updated_segments,
+                        variables,
+                    )
 
-            if next_node:
-                active_root_node = next_node
+                variables[current_node.path_template.strip("<>")] = current_segment
 
-                # Handle path templates, the current setup supports two kind of path templates in the end
-                # which need to be delt differently.
-                # if next_node.path_template:
-
-                if next_node.path_template and len(remaining_segments) == 1:
-                    if next_node.segment == current_segment:
-                        return next_node, []
-
-                    return active_root_node, remaining_segments
-
-                remaining_segments.pop(0)
-                continue
-
-            if not self.ignore_empty_folders and len(remaining_segments) > 0:
-                next_segment = remaining_segments.pop(0)
-                concat_segment = f"{current_segment}/{next_segment}"
-                remaining_segments.insert(0, concat_segment)
-                continue
-
+            updated_segments[loading_state_key] = True
             remaining_segments.pop(0)
 
-        return active_root_node, remaining_segments
+        return active_root_node, remaining_segments, updated_segments, variables
 
     def build_execution_tree(
         self,
@@ -285,6 +316,7 @@ class Router:
             parent_segment=current_node.parent_segment,
             variables=current_variables,
             loading_state=loading_state,
+            path_template=current_node.path_template,
         )
 
         # Handle parallel routes
@@ -369,6 +401,7 @@ class Router:
                     },
                 }
 
+            print("_________________", flush=True)
             path = self.strip_relative_path(pathname_)
 
             # handle roote and check for static routes
@@ -393,14 +426,14 @@ class Router:
                 segment for segment in pathname_.strip("/").split("/") if segment
             ]
 
-            active_root_node, remaining_segments = self._get_root_node(
-                init_segments, loading_state_
+            active_root_node, remaining_segments, updated_segments, path_variables = (
+                self._get_root_node(init_segments, loading_state_)
             )
 
-            print("_________________", flush=True)
-            print("Pathname: ", pathname_, flush=True)
-            print("Update segments: ", remaining_segments, flush=True)
-            print("Active Root Node: ", active_root_node, flush=True)
+            # print("Pathname: ", pathname_, flush=True)
+            # print("Update segments: ", remaining_segments, flush=True)
+            # print("Active Root Node: ", active_root_node, flush=True)
+            # print("Loading State: ", loading_state_)
 
             if not active_root_node:
                 return {
@@ -417,9 +450,9 @@ class Router:
             exec_tree = self.build_execution_tree(
                 current_node=active_root_node,
                 segments=remaining_segments,
-                parent_variables={},  # Start with empty variables
+                parent_variables=path_variables,  # Start with empty variables
                 query_params=query_parameters,
-                loading_state=loading_state_,
+                loading_state=updated_segments,
             )
 
             if not exec_tree:
@@ -435,15 +468,11 @@ class Router:
                 }
 
             final_layout = await exec_tree.execute()
+            new_loading_state = {**updated_segments, **exec_tree.loading_state}
 
-            # clean loading store
-            new_loading_state = {
-                segment: state
-                for segment, state in exec_tree.loading_state.items()
-                if segment in init_segments
-            }
-
-            new_loading_state["raw_path"] = active_root_node.path.split("/")
+            print("Exec loading state: ", exec_tree.loading_state, flush=True)
+            print("updated segment: ", updated_segments, flush=True)
+            # new_loading_state["raw_path"] = active_root_node.path.split("/")
 
             container_id = RootContainer.ids.container
 
@@ -467,6 +496,7 @@ class Router:
                 "multi": True,
                 "response": {
                     container_id: {"children": recursive_to_plotly_json(final_layout)},
+                    RootContainer.ids.state_store: {"data": new_loading_state},
                 },
             }
 

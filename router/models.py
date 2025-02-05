@@ -7,12 +7,14 @@ from dash import html
 from dash.development.base_component import Component
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from ._utils import create_pathtemplate_key
 from .components import ChildContainer, SlotContainer
 
 
 class RouteConfig(BaseModel):
     path_template: Optional[str] = None
     view_template: Optional[str] = None
+    default_child: Optional[str] = None
     has_slots: bool = False
     title: Optional[str] = None
     description: Optional[str] = None
@@ -136,6 +138,7 @@ class ExecNode:
     variables: Dict[str, str] = field(default_factory=dict)
     slots: Dict[str, "ExecNode"] = field(default_factory=dict)
     views: Dict[str, "ExecNode"] = field(default_factory=dict)
+    path_template: Optional[str] = None
 
     async def execute(self) -> Component:
         """
@@ -146,6 +149,18 @@ class ExecNode:
         views_content = await self._handle_views()
 
         combined_kwargs = {**self.variables, **slots_content, **views_content}
+        segment_key = self.segment
+
+        if self.path_template:
+            path_key = self.path_template.strip("<>")
+            path_variable = self.variables.get(path_key)
+            segment_key = create_pathtemplate_key(
+                self.segment, self.path_template, path_variable, path_key
+            )
+
+        print("Segment keyL: ", segment_key, flush=True)
+
+        self.loading_state[segment_key] = True
         if callable(self.layout):
             try:
                 layout = (
@@ -176,7 +191,6 @@ class ExecNode:
                     slot_layout, self.segment, slot_name
                 )
 
-                self.loading_state[slot_name] = True
             return results
 
         return {}
@@ -187,16 +201,12 @@ class ExecNode:
         """
         if self.views:
             view_template, view_node = next(iter(self.views.items()))
+            print(view_template, self.variables, flush=True)
             layout = await view_node.execute() if view_node else None
             layout_index_segment = (
                 self.segment if self.parent_segment == "/" else self.parent_segment
             )
-            self.loading_state[self.segment] = True
-            return {
-                view_template: ChildContainer(
-                    layout, layout_index_segment, self.segment
-                )
-            }
+            return {view_template: ChildContainer(layout, self.segment, self.segment)}
 
         return {}
 
