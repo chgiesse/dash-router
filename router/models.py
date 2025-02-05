@@ -158,8 +158,6 @@ class ExecNode:
                 self.segment, self.path_template, path_variable, path_key
             )
 
-        print("Segment keyL: ", segment_key, flush=True)
-
         self.loading_state[segment_key] = True
         if callable(self.layout):
             try:
@@ -201,12 +199,12 @@ class ExecNode:
         """
         if self.views:
             view_template, view_node = next(iter(self.views.items()))
-            print(view_template, self.variables, flush=True)
             layout = await view_node.execute() if view_node else None
-            layout_index_segment = (
-                self.segment if self.parent_segment == "/" else self.parent_segment
-            )
-            return {view_template: ChildContainer(layout, self.segment, self.segment)}
+            return {
+                view_template: ChildContainer(
+                    layout, self.segment, view_node.segment if view_node else None
+                )
+            }
 
         return {}
 

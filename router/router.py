@@ -261,11 +261,22 @@ class Router:
                 else current_segment
             )
 
+            active_root_node = current_node
             if not loading_state.get(loading_state_key, False):
                 print("segment: ", loading_state_key, "is not loaded", flush=True)
-                return current_node, remaining_segments, updated_segments, variables
+                # if not current_node.path_template:
+                #     return (
+                #         active_root_node,
+                #         remaining_segments,
+                #         updated_segments,
+                #         variables,
+                #     )
 
-            active_root_node = current_node
+                if current_node.segment == loading_state_key:
+                    remaining_segments.pop(0)
+
+                return active_root_node, remaining_segments, updated_segments, variables
+
             if current_node.path_template:
                 if len(remaining_segments) == 1:
                     return (
@@ -431,8 +442,8 @@ class Router:
             )
 
             # print("Pathname: ", pathname_, flush=True)
-            # print("Update segments: ", remaining_segments, flush=True)
-            # print("Active Root Node: ", active_root_node, flush=True)
+            print("Update segments: ", path_variables, flush=True)
+            print("Active Root Node: ", active_root_node, flush=True)
             # print("Loading State: ", loading_state_)
 
             if not active_root_node:
@@ -470,8 +481,8 @@ class Router:
             final_layout = await exec_tree.execute()
             new_loading_state = {**updated_segments, **exec_tree.loading_state}
 
-            print("Exec loading state: ", exec_tree.loading_state, flush=True)
-            print("updated segment: ", updated_segments, flush=True)
+            # print("Exec loading state: ", exec_tree.loading_state, flush=True)
+            # print("updated segment: ", updated_segments, flush=True)
             # new_loading_state["raw_path"] = active_root_node.path.split("/")
 
             container_id = RootContainer.ids.container

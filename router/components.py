@@ -16,6 +16,7 @@ class ChildContainer(html.Div):
         self, layout: Component, segment: str, child_name: str = None, *args, **kwargs
     ):
         self.props.active = child_name
+        print("set active props: ", self.props.active, flush=True)
 
         super().__init__(
             id=self.ids.container(segment), children=layout, *args, **kwargs
@@ -36,6 +37,8 @@ class SlotContainer(html.Div):
         self, layout: Component, segment: str, slot_name: str, *args, **kwargs
     ):
         self.props.active = slot_name
+
+        print("set active props: ", self.props.active, flush=True)
 
         super().__init__(
             id=self.ids.container(segment, slot_name), children=layout, *args, **kwargs
@@ -58,4 +61,3 @@ class RootContainer(html.Div):
                 html.Div(id=self.ids.dummy, disable_n_clicks=True),
             ]
         )
-

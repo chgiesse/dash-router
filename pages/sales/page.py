@@ -9,7 +9,8 @@ config = RouteConfig(view_template="[sales_sub_view]", default_child="overview")
 
 
 async def layout(sales_sub_view: ChildContainer = None, **kwargs):
-    tab = sales_sub_view.props.active if sales_sub_view else "overview"
+    tab = sales_sub_view.props.active
+    print("TAB: ", tab, flush=True)
     return dmc.Stack(
         m=0,
         p=0,
