@@ -13,10 +13,8 @@ from .components import ChildContainer, SlotContainer
 
 class RouteConfig(BaseModel):
     path_template: Optional[str] = None
-    view_template: Optional[str] = None
     default_child: Optional[str] = None
     is_static: bool = False
-    has_slots: bool = False
     title: Optional[str] = None
     description: Optional[str] = None
     name: Optional[str] = None
@@ -40,21 +38,6 @@ class RouteConfig(BaseModel):
 
         raise ValidationError("A path template has to start with < and end with >")
 
-    @field_validator("view_template")
-    def validate_view_template(cls, value: any) -> Optional[str]:
-        if not value:
-            return None
-
-        if not isinstance(value, str):
-            raise ValidationError(
-                f"{type(value)} is not a valid type. Has to be either string or none."
-            )
-
-        if value.startswith("[") and value.endswith("]"):
-            return value
-
-        raise ValidationError("A path template has to start with [ and end with ]")
-
 
 class PageNode(BaseModel):
     layout: Callable | Component
@@ -63,7 +46,6 @@ class PageNode(BaseModel):
     parent_segment: str
     path: str | None = None
     path_template: str | None = None
-    view_template: str | None = None
     is_slot: bool = False
     is_static: bool = True
     is_root: bool | None = None
@@ -109,7 +91,6 @@ class PageNode(BaseModel):
         # self.image_url = config.image_url
         # self.redirect_from = config.redirect_from
         # self.has_slots = config.has_slots
-        self.view_template = config.view_template
         self.default_child = config.default_child
 
 
