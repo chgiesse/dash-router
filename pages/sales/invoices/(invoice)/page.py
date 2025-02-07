@@ -10,8 +10,8 @@ from ._components.tabs import InvoiceTabs
 config = RouteConfig(path_template="<invoice_id>", default_child="items")
 
 
-# async def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
-def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
+async def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
+    # def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
     if not invoice_id:
         return html.Div("Select an invoice")
 

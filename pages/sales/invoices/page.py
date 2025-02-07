@@ -8,8 +8,8 @@ from ._components.figures import bar_chart
 config = RouteConfig()
 
 
-# async def layout(invoice=SlotContainer, overview=SlotContainer, **kwargs):
-def layout(invoice=SlotContainer, overview=SlotContainer, **kwargs):
+async def layout(invoice=SlotContainer, overview=SlotContainer, **kwargs):
+    # def layout(invoice=SlotContainer, overview=SlotContainer, **kwargs):
     return dmc.SimpleGrid(
         cols=2,
         children=[

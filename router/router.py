@@ -5,20 +5,19 @@ import os
 import traceback
 from typing import Dict, List, Optional, Tuple, Union
 
-from dash import Dash, Input, Output, State, html
-
-# from dash import Dash, html
+# from dash import Dash, Input, Output, State, html
+from dash import Dash, html
 from dash._get_paths import app_strip_relative_path
 
-# from dash.development.base_component import Component
-# from flash import Flash, Input, Output, State
-# from flash._pages import _parse_path_variables, _parse_query_string
-from dash._pages import _parse_path_variables, _parse_query_string
+# from dash._pages import _parse_path_variables, _parse_query_string
 from dash._utils import inputs_to_vals
 
-# from quart import request
-from flask import request
+# from dash.development.base_component import Component
+from flash import Flash, Input, Output, State
+from flash._pages import _parse_path_variables, _parse_query_string
+from quart import request
 
+# from flask import request
 from ._utils import create_pathtemplate_key, recursive_to_plotly_json
 from .components import ChildContainer, RootContainer, SlotContainer
 from .models import ExecNode, PageNode, RootNode, RouteConfig
@@ -46,9 +45,9 @@ class Router:
         if isinstance(self.app, Dash):
             self.is_async = False
             self.setup_router_sync()
-        # elif isinstance(self.app, Flash):
-        #     self.is_async = True
-        #     self.setup_router_async()
+        elif isinstance(self.app, Flash):
+            self.is_async = True
+            self.setup_router_async()
         else:
             raise TypeError(
                 f"App needs to be of type Dash or flash not: {type(self.app)}"
