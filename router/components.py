@@ -23,7 +23,11 @@ class ChildContainer(html.Div):
         self.props.active = segment
 
         super().__init__(
-            id=self.ids.container(parent_segment), children=layout, *args, **kwargs
+            id=self.ids.container(parent_segment),
+            children=layout,
+            disable_n_clicks=True,
+            *args,
+            **kwargs,
         )
 
 
@@ -36,15 +40,24 @@ class SlotContainer(html.Div):
 
     class props:
         active = None
+        is_loaded = None
 
     def __init__(
-        self, layout: Component, parent_segment: str, slot_name: str, *args, **kwargs
+        self,
+        layout: Component,
+        parent_segment: str,
+        slot_name: str,
+        is_loaded: bool = True,
+        *args,
+        **kwargs,
     ):
         self.props.active = parent_segment
+        self.props.is_loaded = is_loaded
 
         super().__init__(
             id=self.ids.container(parent_segment, slot_name),
             children=layout,
+            disable_n_clicks=True,
             *args,
             **kwargs,
         )

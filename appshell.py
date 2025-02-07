@@ -1,25 +1,34 @@
-import dash_mantine_components as dmc 
+import dash_mantine_components as dmc
+
 
 def create_appshell(content):
     return dmc.MantineProvider(
-        forceColorScheme='dark',
+        forceColorScheme="dark",
         children=dmc.AppShell(
             [
                 # dmc.AppShellHeader("", h=45),
-                dmc.AppShellNavbar(dmc.Stack(
-                    [
-                        dmc.NavLink(href='/', label='home'),
-                        dmc.NavLink(href='/sales', label='Sales'),
-                        dmc.NavLink(href='/page-2', label='Page 2'),
-                    ]
-                )),
-                dmc.AppShellMain(children=content, className='animated-card', m=0),
+                # dmc.AppShellNavbar(
+                #     dmc.Stack(
+                #         [
+                #             dmc.NavLink(href="/", label="home"),
+                #             dmc.NavLink(href="/sales", label="Sales"),
+                #             dmc.NavLink(href="/page-2", label="Page 2"),
+                #         ]
+                #     )
+                # ),
+                dmc.AppShellMain(
+                    children=content,
+                    className="animated-card",
+                    m=0,
+                    # maw=1400,
+                    py="auto",
+                ),
             ],
-            padding="xs",    
+            padding="xs",
             navbar={
-                "width": 250,
+                "width": 0,
                 "breakpoint": "sm",
                 "collapsed": {"mobile": True},
-            }
-        )
+            },
+        ),
     )

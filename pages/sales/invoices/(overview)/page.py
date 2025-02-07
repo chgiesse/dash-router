@@ -1,8 +1,6 @@
-import dash_mantine_components as dmc
+from .._components.table import create_invoice_table
 
-async def layout(**kwargs):
-    return [
-        dmc.Anchor(href='/sales/invoices/1', children='invoice id: 1'),
-        dmc.Anchor(href='/sales/invoices/2', children='invoice id: 2'),
-        dmc.Anchor(href='/sales/invoices/3', children='invoice id: 3'),
-    ]
+
+# async def layout(**kwargs):
+def layout(**kwargs):
+    return create_invoice_table()

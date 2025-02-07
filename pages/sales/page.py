@@ -8,7 +8,8 @@ from ._components.tabs import SalesTabs
 config = RouteConfig(default_child="overview")
 
 
-async def layout(children: ChildContainer = None, **kwargs):
+# async def layout(children: ChildContainer = None, **kwargs):
+def layout(children: ChildContainer = None, **kwargs):
     tab = children.props.active
     return dmc.Stack(
         m=0,

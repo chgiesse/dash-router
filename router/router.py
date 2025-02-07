@@ -5,14 +5,19 @@ import os
 import traceback
 from typing import Dict, List, Optional, Tuple, Union
 
-from dash import Dash, html
+from dash import Dash, Input, Output, State, html
+
+# from dash import Dash, html
 from dash._get_paths import app_strip_relative_path
-from dash._utils import inputs_to_vals
 
 # from dash.development.base_component import Component
-from flash import Flash, Input, Output, State
-from flash._pages import _parse_path_variables, _parse_query_string
-from quart import request
+# from flash import Flash, Input, Output, State
+# from flash._pages import _parse_path_variables, _parse_query_string
+from dash._pages import _parse_path_variables, _parse_query_string
+from dash._utils import inputs_to_vals
+
+# from quart import request
+from flask import request
 
 from ._utils import create_pathtemplate_key, recursive_to_plotly_json
 from .components import ChildContainer, RootContainer, SlotContainer
@@ -25,7 +30,7 @@ from .models import ExecNode, PageNode, RootNode, RouteConfig
 class Router:
     def __init__(
         self,
-        app: Union[Dash, Flash],
+        app,  #: Union[Dash, Flash],
         pages_folder: str = "pages",
         requests_pathname_prefix: str = None,
         ignore_empty_folders: bool = False,
@@ -40,16 +45,16 @@ class Router:
 
         if isinstance(self.app, Dash):
             self.is_async = False
-        elif isinstance(self.app, Flash):
-            self.is_async = True
+            self.setup_router_sync()
+        # elif isinstance(self.app, Flash):
+        #     self.is_async = True
+        #     self.setup_router_async()
         else:
             raise TypeError(
                 f"App needs to be of type Dash or flash not: {type(self.app)}"
             )
 
         self.setup_route_tree()
-
-        self.setup_router()
 
     def setup_route_tree(self) -> None:
         root_dir = ".".join(self.app.server.name.split(os.sep)[:-1])
@@ -326,7 +331,7 @@ class Router:
 
         return exec_node
 
-    def setup_router(self):
+    def setup_router_async(self):
         @self.app.server.before_request
         async def router():
             request_data = await request.get_data()
@@ -425,7 +430,7 @@ class Router:
                     },
                 }
 
-            final_layout = await exec_tree.execute()
+            final_layout = await exec_tree.execute_async()
             new_loading_state = {**updated_segments, **exec_tree.loading_state}
             container_id = RootContainer.ids.container
 
@@ -453,7 +458,7 @@ class Router:
                 },
             }
 
-        @self.app.server.before_serving
+        # @self.app.server.before_serving
         async def trigger_router():
             inputs = {
                 "pathname_": Input(RootContainer.ids.location, "pathname"),
@@ -470,3 +475,148 @@ class Router:
                 pathname_: str, search_: str, loading_state_: str, **states
             ):
                 return
+
+    def setup_router_sync(self):
+        @self.app.server.before_request
+        def router():
+            request_data = request.get_data()
+
+            if not request_data:
+                return
+
+            body = json.loads(request_data)
+            changed_prop = body["changedPropIds"]
+
+            # I expect '[dash-router-location.pathname]'
+            changed_prop_id = changed_prop[0].split(".")[0] if changed_prop else None
+
+            # Pass if the current request is not by our location
+            if changed_prop_id != RootContainer.ids.location:
+                return
+
+            inputs = body.get("inputs", [])
+            state = body.get("state", [])
+
+            args = inputs_to_vals(inputs + state)
+
+            pathname_, search_, loading_state_ = args
+
+            query_parameters = _parse_query_string(search_)
+
+            # Handle root path specially
+            if pathname_ == "/" or not pathname_:
+                node = self.route_registry.get_route("/")
+                layout = node.layout(**query_parameters)
+                return {
+                    "multi": True,
+                    "response": {
+                        RootContainer.ids.container: {
+                            "children": recursive_to_plotly_json(layout)
+                        },
+                    },
+                }
+
+            path = self.strip_relative_path(pathname_)
+
+            # handle roote and check for static routes
+            static_route, path_variables = self.get_static_route(path)
+            if static_route:
+                layout = static_route.layout(**query_parameters, **path_variables or {})
+
+                return {
+                    "multi": True,
+                    "response": {
+                        RootContainer.ids.container: {
+                            "children": recursive_to_plotly_json(layout)
+                        },
+                    },
+                }
+
+            # segment wise tree search
+            init_segments = [
+                segment for segment in pathname_.strip("/").split("/") if segment
+            ]
+
+            active_root_node, remaining_segments, updated_segments, path_variables = (
+                self._get_root_node(init_segments, loading_state_)
+            )
+
+            if not active_root_node:
+                return {
+                    "multi": True,
+                    "response": {
+                        RootContainer.ids.container: {
+                            "children": recursive_to_plotly_json(
+                                html.H1("404 - Page not found")
+                            )
+                        },
+                    },
+                }
+
+            exec_tree = self.build_execution_tree(
+                current_node=active_root_node,
+                segments=remaining_segments,
+                parent_variables=path_variables,  # Start with empty variables
+                query_params=query_parameters,
+                loading_state=updated_segments,
+            )
+
+            if not exec_tree:
+                return {
+                    "multi": True,
+                    "response": {
+                        RootContainer.ids.container: {
+                            "children": recursive_to_plotly_json(
+                                html.H1("404 - Page not found")
+                            )
+                        },
+                    },
+                }
+
+            final_layout = exec_tree.execute_sync()
+            new_loading_state = {**updated_segments, **exec_tree.loading_state}
+            container_id = RootContainer.ids.container
+
+            if active_root_node.parent_segment != "/":
+                if active_root_node.is_slot:
+                    container_id = json.dumps(
+                        SlotContainer.ids.container(
+                            active_root_node.parent_segment,
+                            active_root_node.segment,
+                        )
+                    )
+
+                else:
+                    container_id = json.dumps(
+                        ChildContainer.ids.container(
+                            active_root_node.parent_segment,
+                        )
+                    )
+
+            return {
+                "multi": True,
+                "response": {
+                    container_id: {"children": recursive_to_plotly_json(final_layout)},
+                    RootContainer.ids.state_store: {"data": new_loading_state},
+                },
+            }
+
+        # @self.app.server.before_request
+        # def trigger_router():
+        #     if LOADED:
+        #         return
+        #
+        #     LOADED = True
+        #     inputs = {
+        #         "pathname_": Input(RootContainer.ids.location, "pathname"),
+        #         "search_": Input(RootContainer.ids.location, "search"),
+        #         "loading_state_": State(RootContainer.ids.state_store, "data"),
+        #     }
+        #
+        #     inputs.update(self.app.routing_callback_inputs)
+        #
+        #     @self.app.callback(
+        #         Output(RootContainer.ids.dummy, "children"), inputs=inputs
+        #     )
+        #     def update(pathname_: str, search_: str, loading_state_: str, **states):
+        #         return
