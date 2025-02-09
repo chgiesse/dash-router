@@ -1,14 +1,15 @@
 import dash_mantine_components as dmc
-from dash import html
 
-from .._components.figures import create_rel_barchart
+from .._components.figures import donut_chart
 
 
 async def layout(**kwargs):
     # def layout(**kwargs):
     return dmc.Stack(
         [
-            html.Div(f"All positions for invoice id: {kwargs.get('invoice_id')}"),
-            create_rel_barchart(),
+            dmc.Title(
+                f"All positions for invoice id: {kwargs.get('invoice_id')}", order=3
+            ),
+            donut_chart,
         ]
     )

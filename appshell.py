@@ -1,32 +1,73 @@
 import dash_mantine_components as dmc
 
+from _global_components.sidebar import navbar
+
+shadcn_gray = [
+    "#030712",
+    "#111827",
+    "#1f2937",
+    "#374151",
+    "#4b5563",
+    "#6b7280",
+    "#9ca3af",
+    "#e5e7eb",
+    "#f3f4f6",
+    "#f9fafb",
+]
+
+shadcn_slate = [
+    "#020617",
+    "#0f172a",
+    "#1e293b",
+    "#334155",
+    "#475569",
+    "#64748b",
+    "#94a3b8",
+    "#e2e8f0",
+    "#f1f5f9",
+    "#f8fafc",
+]
+
+mantine_dark = [
+    "#d3d4d6",
+    "#7a7e83",
+    "#383e46",
+    "#4a5d79",
+    # '#d3d4d6',
+    "#222831",
+    "#1f242c",
+    "#181c22",
+    "#0e1014",
+    "#14181d",
+    "#1b2027",
+]
+
 
 def create_appshell(content):
     return dmc.MantineProvider(
-        forceColorScheme="dark",
+        forceColorScheme="light",
+        theme={
+            "primaryColor": "violet",
+            "defaultRadius": "md",
+            "components": {"Card": {"defaultProps": {"shadow": "sm"}}},
+            "focusRing": "auto",
+            "colors": {
+                "dark": mantine_dark,
+                "slate": list(reversed(shadcn_slate)),
+            },
+            "primarShade": 1,
+        },
         children=dmc.AppShell(
             [
                 # dmc.AppShellHeader("", h=45),
-                # dmc.AppShellNavbar(
-                #     dmc.Stack(
-                #         [
-                #             dmc.NavLink(href="/", label="home"),
-                #             dmc.NavLink(href="/sales", label="Sales"),
-                #             dmc.NavLink(href="/page-2", label="Page 2"),
-                #         ]
-                #     )
-                # ),
+                navbar,
                 dmc.AppShellMain(
                     children=content,
-                    className="animated-card",
-                    m=0,
-                    # maw=1400,
-                    py="auto",
                 ),
             ],
-            padding="xs",
+            padding="md",
             navbar={
-                "width": 0,
+                "width": 65,
                 "breakpoint": "sm",
                 "collapsed": {"mobile": True},
             },

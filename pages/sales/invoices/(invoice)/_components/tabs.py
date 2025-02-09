@@ -5,11 +5,9 @@ class InvoiceTabs(dmc.Tabs):
     class ids:
         tabs = "invoice-tabs"
 
-    def __init__(self, active_tab: str = None, invoice_id: str = None):
+    def __init__(self, active_tab: str = None, invoice_id: str = None, *args, **kwargs):
         super().__init__(
             id=self.ids.tabs,
-            variant="pills",
-            color="dark",
             value=active_tab,
             children=dmc.TabsList(
                 [
@@ -26,4 +24,6 @@ class InvoiceTabs(dmc.Tabs):
                     # dmc.Anchor(dmc.TabsTab('Invoices', value='invoices'), href='/sales/invoices', underline=False),
                 ]
             ),
+            *args,
+            **kwargs,
         )

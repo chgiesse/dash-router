@@ -11,58 +11,81 @@ data = [
 
 donut_chart = dmc.DonutChart(
     data=data,
-    size=80,
+    size=200,
     thickness=30,
     m="auto",
     tooltipDataSource="segment",
-    pieProps={"isAnimationActive": True},
+    pieProps={
+        "isAnimationActive": True,
+        "animationDuration": 500,
+        "animationEasing": "ease-in-out",
+    },
+    withLabels=True,
 )
 
-data_comp = [
-    {
-        "date": "Mar 22",
-        "Apples": random.randint(50, 3000),
-        "Oranges": random.randint(50, 3000),
-        "Tomatoes": 2452,
-    },
-    {
-        "date": "Mar 23",
-        "Apples": 2756,
-        "Oranges": 2103,
-        "Tomatoes": 2402,
-    },
-    {
-        "date": "Mar 24",
-        "Apples": 3322,
-        "Oranges": random.randint(50, 3000),
-        "Tomatoes": 1821,
-    },
-    {
-        "date": "Mar 25",
-        "Apples": random.randint(50, 3000),
-        "Oranges": random.randint(50, 3000),
-        "Tomatoes": 2809,
-    },
-    {
-        "date": "Mar 26",
-        "Apples": 3129,
-        "Oranges": random.randint(50, 3000),
-        "Tomatoes": random.randint(50, 3000),
-    },
-]
 
-comp_figure = dmc.CompositeChart(
-    h=300,
-    data=data,
-    dataKey="date",
-    withLegend=True,
-    maxBarWidth=30,
-    series=[
-        {"name": "Tomatoes", "color": "rgba(18, 120, 255, 0.2)", "type": "bar"},
-        {"name": "Apples", "color": "red.8", "type": "line"},
-        {"name": "Oranges", "color": "yellow.8", "type": "area"},
-    ],
-)
+def create_comp_chart():
+    data_comp = [
+        {
+            "date": "Mar 22",
+            "Apples": random.randint(50, 3000),
+            "Oranges": random.randint(50, 3000),
+            "Tomatoes": 2452,
+        },
+        {
+            "date": "Mar 23",
+            "Apples": 2756,
+            "Oranges": 2103,
+            "Tomatoes": 2402,
+        },
+        {
+            "date": "Mar 24",
+            "Apples": 3322,
+            "Oranges": random.randint(50, 3000),
+            "Tomatoes": 1821,
+        },
+        {
+            "date": "Mar 25",
+            "Apples": random.randint(50, 3000),
+            "Oranges": random.randint(50, 3000),
+            "Tomatoes": 2809,
+        },
+        {
+            "date": "Mar 26",
+            "Apples": 3129,
+            "Oranges": random.randint(50, 3000),
+            "Tomatoes": random.randint(50, 3000),
+        },
+    ]
+
+    return dmc.CompositeChart(
+        h=300,
+        data=data_comp,
+        dataKey="date",
+        withLegend=True,
+        maxBarWidth=30,
+        gridAxis="none",
+        lineProps={
+            "isAnimationActive": True,
+            "animationDuration": 500,
+            "animationEasing": "ease-in-out",
+        },
+        barProps={
+            "isAnimationActive": True,
+            "animationDuration": 500,
+            "animationEasing": "ease-in-out",
+        },
+        areaProps={
+            "isAnimationActive": True,
+            "animationDuration": 500,
+            "animationEasing": "ease-in-out",
+        },
+        series=[
+            {"name": "Tomatoes", "color": "rgba(18, 120, 255, 0.2)", "type": "bar"},
+            {"name": "Apples", "color": "red.8", "type": "line"},
+            {"name": "Oranges", "color": "yellow.8", "type": "area"},
+        ],
+    )
 
 
 def create_water_chart():
@@ -106,6 +129,7 @@ def create_water_chart():
         series=[{"name": "Effective tax rate in %", "color": "blue"}],
         withLegend=True,
         barProps={"isAnimationActive": True},
+        gridAxis="none",
     )
 
 
@@ -146,6 +170,7 @@ def create_line_chart():
         activeDotProps={"r": 8, "strokeWidth": 1, "fill": "#fff"},
         tickLine="none",
         withXAxis=False,
+        gridAxis="none",
         series=[
             {"name": "Apples", "color": "indigo.6"},
             {"name": "Oranges", "color": "blue.6"},
@@ -174,9 +199,65 @@ def create_rel_barchart():
         data=data,
         type="percent",
         barProps={"isAnimationActive": True, "radius": 50},
+        gridAxis="none",
         series=[
             {"name": "Smartphones", "color": "violet.6"},
             {"name": "Laptops", "color": "blue.6"},
             {"name": "Tablets", "color": "teal.6"},
+        ],
+    )
+
+
+def create_sales_bar():
+    data = [
+        {
+            "month": "January",
+            "Smartphones": random.randint(50, 3000),
+            "Laptops": random.randint(50, 3000),
+            "Tablets": random.randint(50, 3000),
+        },
+        {
+            "month": "February",
+            "Smartphones": random.randint(50, 3000),
+            "Laptops": random.randint(50, 3000),
+            "Tablets": random.randint(50, 3000),
+        },
+        {
+            "month": "March",
+            "Smartphones": random.randint(50, 3000),
+            "Laptops": random.randint(50, 3000),
+            "Tablets": random.randint(50, 3000),
+        },
+        {
+            "month": "April",
+            "Smartphones": random.randint(50, 3000),
+            "Laptops": random.randint(50, 3000),
+            "Tablets": random.randint(50, 3000),
+        },
+        {
+            "month": "May",
+            "Smartphones": random.randint(50, 3000),
+            "Laptops": random.randint(50, 3000),
+            "Tablets": random.randint(50, 3000),
+        },
+        {
+            "month": "June",
+            "Smartphones": random.randint(50, 3000),
+            "Laptops": random.randint(50, 3000),
+            "Tablets": random.randint(50, 3000),
+        },
+    ]
+
+    return dmc.BarChart(
+        h=200,
+        dataKey="month",
+        data=data,
+        type="stacked",
+        barProps={"isAnimationActive": True, "radius": 50},
+        gridAxis="none",
+        series=[
+            {"name": "Smartphones", "label": "Smartphones sales", "color": "violet.6"},
+            {"name": "Laptops", "label": "Laptops sales", "color": "blue.6"},
+            {"name": "Tablets", "label": "Tablets sales", "color": "teal.6"},
         ],
     )

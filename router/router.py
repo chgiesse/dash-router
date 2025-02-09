@@ -599,23 +599,3 @@ class Router:
                     RootContainer.ids.state_store: {"data": new_loading_state},
                 },
             }
-
-        # @self.app.server.before_request
-        # def trigger_router():
-        #     if LOADED:
-        #         return
-        #
-        #     LOADED = True
-        #     inputs = {
-        #         "pathname_": Input(RootContainer.ids.location, "pathname"),
-        #         "search_": Input(RootContainer.ids.location, "search"),
-        #         "loading_state_": State(RootContainer.ids.state_store, "data"),
-        #     }
-        #
-        #     inputs.update(self.app.routing_callback_inputs)
-        #
-        #     @self.app.callback(
-        #         Output(RootContainer.ids.dummy, "children"), inputs=inputs
-        #     )
-        #     def update(pathname_: str, search_: str, loading_state_: str, **states):
-        #         return

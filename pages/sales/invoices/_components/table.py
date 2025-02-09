@@ -1,10 +1,15 @@
 import dash_mantine_components as dmc
 
+from helpers import get_icon
+
 
 def create_a_button(href: str):
     return dmc.Anchor(
         children=dmc.Button(
-            "Open", variant="light", size="compact-sm"
+            "Open",
+            variant="light",
+            size="compact-sm",
+            rightSection=get_icon("majesticons:open").to_plotly_json(),
         ).to_plotly_json(),
         underline=False,
         href=href,

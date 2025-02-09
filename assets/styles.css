@@ -2,3 +2,49 @@
     border: 5px solid #cfecff; /* Set the border color */
     border-radius: 15px; /* Rounds the corners */
 }
+
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    /* transform: scale(0.97); */
+  }
+
+  100% {
+    opacity: 1;
+    /* transform: scale(1); */
+  }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.4s ease-in;
+}
+
+@keyframes fade-in-right {
+  0% {
+    opacity: 0;
+    transform: translateX(20px); /* Starts 20px to the right */
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0); /* Ends at the original position */
+  }
+}
+
+.animate-fade-in-right {
+  animation: fade-in-right 0.4s ease-in;
+}
+
+
+:root[data-mantine-color-scheme="light"]{ 
+        
+    body {
+        background-color: var(--light-color-body);
+    }
+}
+
+:root{
+  --light-color-body: rgb(245, 247, 248);
+  --light-color-card: rgb(235, 240, 243);
+}
+

@@ -15,20 +15,19 @@ async def layout(invoice=SlotContainer, overview=SlotContainer, **kwargs):
         children=[
             dmc.Stack(
                 [
-                    dmc.SemiCircleProgress(
-                        value=76,
-                        size=300,
-                        thickness=20,
-                        transitionDuration=250,
-                        label="paid invoices",
-                        mx="auto",
-                        labelPosition="center",
-                    ),
-                    bar_chart,
-                    overview,
+                    dmc.Card(dmc.Stack([dmc.Title("Top Vendors", order=2), bar_chart])),
+                    dmc.Card(dmc.Stack([dmc.Title("Invoice list", order=3), overview])),
                 ],
                 gap="lg",
             ),
-            invoice,
+            dmc.Stack(
+                [
+                    invoice,
+                    dmc.Alert(
+                        "This is still the invoices section",
+                        title="Invoices section!",
+                    ),
+                ]
+            ),
         ],
     )
