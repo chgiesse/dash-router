@@ -1,7 +1,7 @@
 import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List
 
 from dash import html
 from dash.development.base_component import Component
@@ -12,19 +12,19 @@ from .components import ChildContainer, SlotContainer
 
 
 class RouteConfig(BaseModel):
-    path_template: Optional[str] = None
-    default_child: Optional[str] = None
+    path_template: str | None = None
+    default_child: str | None = None
     is_static: bool = False
-    title: Optional[str] = None
-    description: Optional[str] = None
-    name: Optional[str] = None
-    order: Optional[int] = None
-    image: Optional[str] = None
-    image_url: Optional[str] = None
-    redirect_from: Optional[List[str]] = None
+    title: str | None = None
+    description: str | None = None
+    name: str | None = None
+    order: int | None = None
+    image: str | None = None
+    image_url: str | None = None
+    redirect_from: List[str] | None = None
 
     @field_validator("path_template")
-    def validate_path_template(cls, value: any) -> Optional[str]:
+    def validate_path_template(cls, value: any) -> str | None:
         if not value:
             return None
 
@@ -115,14 +115,16 @@ class RootNode(BaseModel):
 class ExecNode:
     """Represents a node in the execution tree"""
 
-    layout: Union[Callable[..., Component], Component]
+    layout: Callable[..., Component] | Component
     segment: str  # Added to keep track of the current segment
     parent_segment: str
     loading_state: Dict[str, bool]
     variables: Dict[str, str] = field(default_factory=dict)
     slots: Dict[str, "ExecNode"] = field(default_factory=dict)
     child_node: Dict[str, "ExecNode"] = field(default_factory=dict)
-    path_template: Optional[str] = None
+    path_template: str | None = None
+    loading: Callable | Component | None = None
+    error: Callable | Component | None = None
 
     async def execute_async(self) -> Component:
         """
@@ -147,10 +149,18 @@ class ExecNode:
             try:
                 layout = await self.layout(**combined_kwargs)
             except Exception as e:
-                layout = html.Div(str(e))
+                layout = self.handle_error(e, self.variables)
             return layout
 
         return self.layout
+
+    def handle_error(self, error: Exception, variables: Dict[str, any]):
+        if self.error:
+            if callable(self.error):
+                layout = self.error(error, variables)
+                return layout
+            return self.error
+        return html.Div(str(error), className="banner")
 
     def execute_sync(self) -> Component:
         """
