@@ -12,6 +12,7 @@ config = RouteConfig(path_template="<invoice_id>", default_child="items")
 
 async def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
     # def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
+
     if not invoice_id:
         return dmc.Stack(
             [
@@ -20,7 +21,6 @@ async def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
             ],
             align="center",
         )
-
     return dmc.Stack(
         [
             dmc.Title("Invoice ID: " + str(invoice_id), order=2),
