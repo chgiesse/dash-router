@@ -55,7 +55,7 @@ def create_appshell(content):
                 "dark": mantine_dark,
                 "slate": list(reversed(shadcn_slate)),
             },
-            "primarShade": 1,
+            # "primarShade": 1,
         },
         children=dmc.AppShell(
             [
