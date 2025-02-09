@@ -52,8 +52,8 @@ class PageNode(BaseModel):
     child_nodes: Dict[str, "PageNode"] = Field(default_factory=dict)
     default_child: str | None = None
     slots: Dict[str, "PageNode"] = Field(default_factory=dict)
-    is_loading: Callable | Component | None = None
-    on_error: Callable | Component | None = None
+    loading: Callable | Component | None = None
+    error: Callable | Component | None = None
 
     class Config:
         arbitrary_types_allowed = True
