@@ -1,6 +1,6 @@
 # from dash import Dash, Input, Output, State  # , _dash_renderer, Dash
 import dash_mantine_components as dmc
-from flash import Flash, Input, Output, State
+from flash import Flash
 
 from appshell import create_appshell
 from router import RootContainer, Router
@@ -18,20 +18,6 @@ app = Flash(
 router = Router(app)
 
 app.layout = create_appshell([RootContainer()])
-
-inputs = {
-    "pathname_": Input(RootContainer.ids.location, "pathname"),
-    "search_": Input(RootContainer.ids.location, "search"),
-    "loading_state_": State(RootContainer.ids.state_store, "data"),
-}
-
-inputs.update(app.routing_callback_inputs)
-
-
-@app.callback(Output(RootContainer.ids.dummy, "children"), inputs=inputs)
-def update(pathname_: str, search_: str, loading_state_: str, **states):
-    return
-
 
 if __name__ == "__main__":
     app.run(debug=True, port=8031)
