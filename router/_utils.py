@@ -1,3 +1,6 @@
+import os
+
+
 def create_pathtemplate_key(
     segment: str, path_template: str, path_variable: str, template_key: str
 ):
@@ -21,3 +24,16 @@ def recursive_to_plotly_json(component):
             component["props"]["children"] = recursive_to_plotly_json(children)
 
     return component
+
+
+def format_segment(segment: str):
+    formatted_segment = segment.strip("()").replace("_", "-").replace(" ", "-")
+
+    return formatted_segment
+
+
+def path_to_module(current_dir: str, module: str):
+    module_path = os.path.join(current_dir, module)
+    module_path_parts = os.path.splitext(module_path)[0].split(os.sep)
+    module_name = ".".join(module_path_parts)
+    return module_name

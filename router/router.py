@@ -2,16 +2,22 @@ import importlib
 import json
 import os
 import traceback
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Tuple, Union
 
 from dash import Dash, html
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
+from dash.development.base_component import Component
 from flash import Flash, Input, Output, State
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import request
 
-from ._utils import create_pathtemplate_key, recursive_to_plotly_json
+from ._utils import (
+    create_pathtemplate_key,
+    format_segment,
+    path_to_module,
+    recursive_to_plotly_json,
+)
 from .components import ChildContainer, RootContainer, SlotContainer
 from .models import ExecNode, PageNode, RootNode, RouteConfig, RouterResponse
 
@@ -111,46 +117,67 @@ class Router:
     def load_route_module(
         self, current_dir: str, segment: str, parent_node: PageNode
     ) -> PageNode | None:
-        module_path = os.path.join(current_dir, "page.py")
-        module_path_parts = os.path.splitext(module_path)[0].split(os.sep)
-        module_name = ".".join(module_path_parts)
-
         is_root = parent_node.segment == "/" or not parent_node.segment
         segment = "/" if not parent_node.segment else segment
+        page_module_name = path_to_module(current_dir, "page.py")
 
-        try:
-            page_module = importlib.import_module(module_name)
-            layout = getattr(page_module, "layout", None)
-            if layout is None:
-                raise ImportError(
-                    f"Module {module_name} needs a layout function or component"
-                )
-            route_config: RouteConfig = getattr(page_module, "config", RouteConfig())
-            is_slot = segment.startswith("(") and segment.endswith(")")
+        page_layout = self.import_route_component(current_dir, "page.py")
+        error_layout = self.import_route_component(current_dir, "error.py")
+        loading_layout = self.import_route_component(current_dir, "loading.py")
+        route_config = (
+            self.import_route_component(current_dir, "page.py", "config")
+            or RouteConfig()
+        )
 
-            new_node = PageNode(
-                layout=layout,
-                segment=segment.strip("()"),
-                parent_segment=parent_node.segment,
-                module=module_name,
-                is_slot=is_slot,
-                is_static=route_config.is_static,
-                is_root=is_root,
-            )
-            new_node.load_config(route_config)
-            return new_node
+        is_slot = segment.startswith("(") and segment.endswith(")")
+        formatted_segment = format_segment(segment)
 
-        except ImportError as e:
-            print(f"Import Error in {module_name}: {e}")
-            print(f"Traceback: {traceback.format_exc()}")
-        except Exception as e:
-            print(f"Error processing {module_name}: {e}")
-            print(f"Traceback: {traceback.format_exc()}")
+        new_node = PageNode(
+            layout=page_layout,
+            segment=formatted_segment,
+            parent_segment=parent_node.segment,
+            module=page_module_name,
+            is_slot=is_slot,
+            is_static=route_config.is_static,
+            is_root=is_root,
+            error=error_layout,
+            loading=loading_layout,
+        )
 
-        return None
+        new_node.load_config(route_config)
+        return new_node
 
     def strip_relative_path(self, path: str) -> str:
         return app_strip_relative_path(self.app.config.requests_pathname_prefix, path)
+
+    def import_route_component(
+        self,
+        current_dir: str,
+        file_name: Literal["page.py", "error.py", "loading.py"],
+        component_name: Literal["layout", "config"] = "layout",
+    ) -> Callable[..., Component] | Component | None:
+        page_module_name = path_to_module(current_dir, file_name)
+        try:
+            page_module = importlib.import_module(page_module_name)
+            layout = getattr(page_module, component_name, None)
+            if file_name == "page.py" and not layout:
+                raise ImportError(
+                    f"Module {page_module_name} needs a layout function or component"
+                )
+            return layout
+
+        except ImportError as e:
+            if file_name == "layout.py":
+                print(f"Error processing {page_module_name}: {e}")
+                print(f"Traceback: {traceback.format_exc()}")
+                raise ImportError(
+                    f"Module {page_module_name} needs a layout function or component"
+                )
+        except Exception as e:
+            print(f"Error processing {page_module_name}: {e}")
+            print(f"Traceback: {traceback.format_exc()}")
+
+        return None
 
     def get_static_route(self, path: str) -> Tuple[PageNode | None, Any]:
         path_variables: Any = None
