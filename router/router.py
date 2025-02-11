@@ -122,7 +122,9 @@ class Router:
         page_module_name = path_to_module(current_dir, "page.py")
 
         page_layout = self.import_route_component(current_dir, "page.py")
-        error_layout = self.import_route_component(current_dir, "error.py")
+        error_layout = (
+            self.import_route_component(current_dir, "error.py") or self.app._on_error
+        )
         loading_layout = self.import_route_component(current_dir, "loading.py")
         route_config = (
             self.import_route_component(current_dir, "page.py", "config")
@@ -288,6 +290,8 @@ class Router:
             variables=current_variables,
             loading_state=loading_state,
             path_template=current_node.path_template,
+            loading=current_node.loading,
+            error=current_node.error,
         )
 
         if current_node.child_nodes:

@@ -6,11 +6,13 @@ from .._components.figures import create_water_chart
 
 async def layout(**kwargs):
     # def layout(**kwargs):
-
+    invoice_id = kwargs.get("invoice_id")
+    if invoice_id == str(1):
+        1 / 0
     return dmc.Stack(
         [
-            dmc.Title(f"All items for invoice id: {kwargs.get('invoice_id')}", order=3),
+            dmc.Title(f"All items for invoice id: {invoice_id}", order=3),
             create_water_chart(),
-            dmc.Group([card, card], grow=True, className="fade-in-right"),
+            dmc.Group([card, card], grow=True),
         ]
     )

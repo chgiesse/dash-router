@@ -157,7 +157,10 @@ class ExecNode:
     def handle_error(self, error: Exception, variables: Dict[str, any]):
         if self.error:
             if callable(self.error):
-                layout = self.error(error, variables)
+                layout = self.error(
+                    error,
+                    variables,
+                )
                 return layout
             return self.error
         return html.Div(str(error), className="banner")
