@@ -9,7 +9,7 @@ from .._components.figures import create_water_chart
 async def layout(**kwargs):
     # def layout(**kwargs):
     invoice_id = kwargs.get("invoice_id")
-    await asyncio.sleep(3)
+    await asyncio.sleep(1.3)
     if invoice_id == str(1):
         1 / 0
     return dmc.Stack(

@@ -142,16 +142,15 @@ class ExecNode:
             )
 
         segment_loading_state = self.loading_state.get(segment_key)
-        if self.loading is not None and is_init:
-            print("Segment is lacy: ", segment_key, flush=True)
+        if self.loading is not None:
+            if is_init and not segment_loading_state:
+                self.loading_state[segment_key] = "lacy"
+                if callable(self.loading):
+                    loading_layout = await self.loading()
+                else:
+                    loading_layout = self.loading
 
-            self.loading_state[segment_key] = "lacy"
-            if callable(self.loading):
-                loading_layout = await self.loading()
-            else:
-                loading_layout = self.loading
-
-            return LacyContainer(loading_layout, self.segment)
+                return LacyContainer(loading_layout, self.segment)
 
         slots_content = await self._handle_slots_async()
         views_content = await self._handle_child_async()

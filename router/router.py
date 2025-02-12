@@ -8,7 +8,7 @@ from dash import Dash, html
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash.development.base_component import Component
-from flash import MATCH, Flash, Input, Output, State, no_update
+from flash import MATCH, Flash, Input, Output, State, no_update, set_props
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import request
 
@@ -224,7 +224,6 @@ class Router:
 
         while remaining_segments:
             segment = remaining_segments[0]
-
             if active_node is None:
                 active_node = self.route_registry.get_route(segment)
                 if not active_node:
@@ -251,7 +250,8 @@ class Router:
             key = compute_key(child_node, segment)
             segment_loading_state = loading_state.get(key, False)
             active_node = child_node
-            if not segment_loading_state or segment_loading_state == "lacy":
+            print(key, segment_loading_state, remaining_segments, flush=True)
+            if not segment_loading_state:
                 if child_node.segment == key:
                     remaining_segments.pop(0)
                 return active_node, remaining_segments, updated_segments, variables
@@ -407,6 +407,7 @@ class Router:
         active_node, remaining_segments, updated_segments, path_vars = (
             self._get_root_node(init_segments, loading_state)
         )
+        print(active_node, flush=True)
         if not active_node:
             return self._build_response(
                 RootContainer.ids.container,
@@ -414,7 +415,6 @@ class Router:
                 {},
                 is_init,
             )
-
         exec_tree = self.build_execution_tree(
             current_node=active_node,
             segments=remaining_segments,
@@ -433,7 +433,7 @@ class Router:
 
         final_layout = await exec_tree.execute_async(is_init)
         new_loading_state = {**updated_segments, **exec_tree.loading_state}
-        print("New loading state: ", new_loading_state, flush=True)
+        # print("New loading state: ", new_loading_state, flush=True)
         container_id = RootContainer.ids.container
         if active_node.parent_segment != "/":
             if active_node.is_slot:
@@ -462,11 +462,12 @@ class Router:
         Wraps a rendered layout and optional state into a RouterResponse model.
         """
         if not is_init:
+            print("UPDATE LOADING STATE CALLBACK ", loading_state, flush=True)
+            set_props(RootContainer.ids.state_store, {"data": loading_state or {}})
             return layout
         rendered_layout = recursive_to_plotly_json(layout)
         response = {container_id: {"children": rendered_layout}}
         if loading_state is not None:
-            print("loading_state in responce: ", loading_state, flush=True)
             response[RootContainer.ids.state_store] = {"data": loading_state}
         return RouterResponse(multi=True, response=response).model_dump()
 
@@ -591,9 +592,16 @@ class Router:
             State(RootContainer.ids.location, "pathname"),
             State(RootContainer.ids.state_store, "data"),
         )
-        async def load_lacy_component(_, pathname_, search_, loading_state_):
+        async def load_lacy_component(
+            lacy_segment_id, pathname_, search_, loading_state_
+        ):
             query_parameters = _parse_query_string(search_)
-            return no_update
+            lacy_segment = lacy_segment_id["index"]
+            if lacy_segment not in pathname_:
+                pathname_ = os.path.join(pathname_, lacy_segment)
+            print("lacy_segment in callback ", lacy_segment, pathname_, flush=True)
             return await self.dispatch(
                 pathname_, query_parameters, loading_state_, is_init=False
             )
+
+            return no_update
