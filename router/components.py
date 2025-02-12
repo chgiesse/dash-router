@@ -79,3 +79,28 @@ class RootContainer(html.Div):
                 html.Div(id=self.ids.dummy, disable_n_clicks=True),
             ]
         )
+
+
+class LacyContainer(html.Div):
+    class ids:
+        container = lambda index: {
+            "index": index,
+            "type": "dash-router-lacy-component",
+        }
+
+    # @callback(
+    #     Output(ids.container(MATCH), "children"),
+    #     Input(ids.container(MATCH), "id"),
+    #     State(RootContainer.ids.location, "pathname"),
+    #     State(RootContainer.ids.state_store, "data"),
+    # )
+    # def load_lacy_compenent(_, path, loading_state):
+    #     print("PATH IN LACY: ", path, loading_state, flush=True)
+    #     return no_update
+
+    def __init__(self, children: Component, segment: str):
+        data_prop = {"data-path": segment}
+
+        super().__init__(
+            children, disable_n_clicks=True, id=self.ids.container(segment), **data_prop
+        )

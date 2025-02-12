@@ -8,7 +8,7 @@ from dash import Dash, html
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash.development.base_component import Component
-from flash import Flash, Input, Output, State
+from flash import MATCH, Flash, Input, Output, State, no_update
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import request
 
@@ -18,7 +18,7 @@ from ._utils import (
     path_to_module,
     recursive_to_plotly_json,
 )
-from .components import ChildContainer, RootContainer, SlotContainer
+from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
 from .models import ExecNode, PageNode, RootNode, RouteConfig, RouterResponse
 
 
@@ -50,6 +50,7 @@ class Router:
             )
 
         self.setup_route_tree()
+        self.setup_lacy_callback()
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
@@ -229,8 +230,9 @@ class Router:
                 if not active_node:
                     return None, [], {}, {}
                 key = compute_key(active_node, segment)
+                segment_loading_state = loading_state.get(key, False)
                 remaining_segments.pop(0)
-                if not loading_state.get(key, False):
+                if not segment_loading_state:  # or segment_loading_state == "lacy"
                     return active_node, remaining_segments, updated_segments, variables
                 updated_segments[key] = True
                 continue
@@ -247,8 +249,9 @@ class Router:
                 continue
 
             key = compute_key(child_node, segment)
+            segment_loading_state = loading_state.get(key, False)
             active_node = child_node
-            if not loading_state.get(key, False):
+            if not segment_loading_state or segment_loading_state == "lacy":
                 if child_node.segment == key:
                     remaining_segments.pop(0)
                 return active_node, remaining_segments, updated_segments, variables
@@ -271,6 +274,7 @@ class Router:
         parent_variables: Dict[str, str],
         query_params: Dict[str, Any],
         loading_state: Dict[str, bool],
+        request_pathname: str,
     ) -> ExecNode | None:
         """
         Recursively builds the execution tree for the matched route.
@@ -292,6 +296,7 @@ class Router:
             path_template=current_node.path_template,
             loading=current_node.loading,
             error=current_node.error,
+            path=request_pathname,
         )
 
         if current_node.child_nodes:
@@ -301,6 +306,7 @@ class Router:
                 current_variables,
                 query_params,
                 loading_state,
+                request_pathname,
             )
             exec_node.child_node["children"] = child_exec
             if not segments:
@@ -313,6 +319,7 @@ class Router:
                 current_variables,
                 query_params,
                 loading_state,
+                request_pathname,
             )
             if not segments:
                 return exec_node
@@ -326,6 +333,7 @@ class Router:
         current_variables: Dict[str, str],
         query_params: Dict[str, Any],
         loading_state: Dict[str, bool],
+        requests_pathname: str,
     ) -> ExecNode | None:
         """Handles processing of a child view node."""
         next_segment = segments[0] if segments else None
@@ -343,6 +351,7 @@ class Router:
                 parent_variables=current_variables,
                 query_params=query_params,
                 loading_state=loading_state,
+                request_pathname=requests_pathname,
             )
         return None
 
@@ -353,6 +362,7 @@ class Router:
         current_variables: Dict[str, str],
         query_params: Dict[str, Any],
         loading_state: Dict[str, bool],
+        requests_pathname: str,
     ) -> Dict[str, ExecNode]:
         """Processes all slot nodes defined on the current node."""
         slot_exec_nodes: Dict[str, ExecNode] = {}
@@ -363,22 +373,100 @@ class Router:
                 parent_variables=current_variables,
                 query_params=query_params,
                 loading_state=loading_state,
+                request_pathname=requests_pathname,
             )
         return slot_exec_nodes
 
     # ─── RESPONSE BUILDER (FOR ASYNC & SYNC) ─────────────────────────────────────
+
+    async def dispatch(
+        self,
+        pathname: str,
+        query_parameters: Dict[str, any],
+        loading_state: Dict[str, any],
+        is_init: bool = True,
+    ) -> RouterResponse:
+        if pathname == "/" or not pathname:
+            node = self.route_registry.get_route("/")
+            layout = await node.layout(**query_parameters)
+            return self._build_response(
+                RootContainer.ids.container, layout, {}, is_init
+            )
+
+        path = self.strip_relative_path(pathname)
+        static_route, path_variables = self.get_static_route(path)
+        if static_route:
+            layout = await static_route.layout(
+                **query_parameters, **(path_variables or {})
+            )
+            return self._build_response(
+                RootContainer.ids.container, layout, {}, is_init
+            )
+
+        init_segments = [seg for seg in pathname.strip("/").split("/") if seg]
+        active_node, remaining_segments, updated_segments, path_vars = (
+            self._get_root_node(init_segments, loading_state)
+        )
+        if not active_node:
+            return self._build_response(
+                RootContainer.ids.container,
+                html.H1("404 - Page not found"),
+                {},
+                is_init,
+            )
+
+        exec_tree = self.build_execution_tree(
+            current_node=active_node,
+            segments=remaining_segments,
+            parent_variables=path_vars,
+            query_params=query_parameters,
+            loading_state=updated_segments,
+            request_pathname=path,
+        )
+        if not exec_tree:
+            return self._build_response(
+                RootContainer.ids.container,
+                html.H1("404 - Page not found"),
+                {},
+                is_init,
+            )
+
+        final_layout = await exec_tree.execute_async(is_init)
+        new_loading_state = {**updated_segments, **exec_tree.loading_state}
+        print("New loading state: ", new_loading_state, flush=True)
+        container_id = RootContainer.ids.container
+        if active_node.parent_segment != "/":
+            if active_node.is_slot:
+                container_id = json.dumps(
+                    SlotContainer.ids.container(
+                        active_node.parent_segment, active_node.segment
+                    )
+                )
+            else:
+                container_id = json.dumps(
+                    ChildContainer.ids.container(active_node.parent_segment)
+                )
+
+        return self._build_response(
+            container_id, final_layout, new_loading_state, is_init
+        )
+
     def _build_response(
         self,
         container_id: str,
         layout: Any,
         loading_state: Dict[str, Any] | None = None,
+        is_init: bool = True,
     ) -> RouterResponse:
         """
         Wraps a rendered layout and optional state into a RouterResponse model.
         """
+        if not is_init:
+            return layout
         rendered_layout = recursive_to_plotly_json(layout)
         response = {container_id: {"children": rendered_layout}}
         if loading_state is not None:
+            print("loading_state in responce: ", loading_state, flush=True)
             response[RootContainer.ids.state_store] = {"data": loading_state}
         return RouterResponse(multi=True, response=response).model_dump()
 
@@ -402,57 +490,9 @@ class Router:
             args = inputs_to_vals(inputs + state)
             pathname_, search_, loading_state_ = args
             query_parameters = _parse_query_string(search_)
+            print("Input loading_state: ", loading_state_, flush=True)
 
-            if pathname_ == "/" or not pathname_:
-                node = self.route_registry.get_route("/")
-                layout = await node.layout(**query_parameters)
-                return self._build_response(RootContainer.ids.container, layout)
-
-            path = self.strip_relative_path(pathname_)
-            static_route, path_variables = self.get_static_route(path)
-            if static_route:
-                layout = await static_route.layout(
-                    **query_parameters, **(path_variables or {})
-                )
-                return self._build_response(RootContainer.ids.container, layout)
-
-            init_segments = [seg for seg in pathname_.strip("/").split("/") if seg]
-            active_node, remaining_segments, updated_segments, path_vars = (
-                self._get_root_node(init_segments, loading_state_)
-            )
-            if not active_node:
-                return self._build_response(
-                    RootContainer.ids.container, html.H1("404 - Page not found")
-                )
-
-            exec_tree = self.build_execution_tree(
-                current_node=active_node,
-                segments=remaining_segments,
-                parent_variables=path_vars,
-                query_params=query_parameters,
-                loading_state=updated_segments,
-            )
-            if not exec_tree:
-                return self._build_response(
-                    RootContainer.ids.container, html.H1("404 - Page not found")
-                )
-
-            final_layout = await exec_tree.execute_async()
-            new_loading_state = {**updated_segments, **exec_tree.loading_state}
-            container_id = RootContainer.ids.container
-            if active_node.parent_segment != "/":
-                if active_node.is_slot:
-                    container_id = json.dumps(
-                        SlotContainer.ids.container(
-                            active_node.parent_segment, active_node.segment
-                        )
-                    )
-                else:
-                    container_id = json.dumps(
-                        ChildContainer.ids.container(active_node.parent_segment)
-                    )
-
-            return self._build_response(container_id, final_layout, new_loading_state)
+            return await self.dispatch(pathname_, query_parameters, loading_state_)
 
         @self.app.server.before_serving
         async def trigger_router():
@@ -469,7 +509,7 @@ class Router:
             async def update(
                 pathname_: str, search_: str, loading_state_: str, **states
             ):
-                return
+                pass
 
     def setup_router_sync(self) -> None:
         @self.app.server.before_request
@@ -519,6 +559,7 @@ class Router:
                 parent_variables=path_vars,
                 query_params=query_parameters,
                 loading_state=updated_segments,
+                request_pathname=path,
             )
             if not exec_tree:
                 return self._build_response(
@@ -541,3 +582,18 @@ class Router:
                     )
 
             return self._build_response(container_id, final_layout, new_loading_state)
+
+    def setup_lacy_callback(self):
+        @self.app.callback(
+            Output(LacyContainer.ids.container(MATCH), "children"),
+            Input(LacyContainer.ids.container(MATCH), "id"),
+            State(RootContainer.ids.location, "pathname"),
+            State(RootContainer.ids.location, "pathname"),
+            State(RootContainer.ids.state_store, "data"),
+        )
+        async def load_lacy_component(_, pathname_, search_, loading_state_):
+            query_parameters = _parse_query_string(search_)
+            return no_update
+            return await self.dispatch(
+                pathname_, query_parameters, loading_state_, is_init=False
+            )

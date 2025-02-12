@@ -8,7 +8,7 @@ from dash.development.base_component import Component
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ._utils import create_pathtemplate_key
-from .components import ChildContainer, SlotContainer
+from .components import ChildContainer, LacyContainer, SlotContainer
 
 
 class RouteConfig(BaseModel):
@@ -119,6 +119,7 @@ class ExecNode:
     segment: str  # Added to keep track of the current segment
     parent_segment: str
     loading_state: Dict[str, bool]
+    path: str
     variables: Dict[str, str] = field(default_factory=dict)
     slots: Dict[str, "ExecNode"] = field(default_factory=dict)
     child_node: Dict[str, "ExecNode"] = field(default_factory=dict)
@@ -126,15 +127,11 @@ class ExecNode:
     loading: Callable | Component | None = None
     error: Callable | Component | None = None
 
-    async def execute_async(self) -> Component:
+    async def execute_async(self, is_init: bool = True) -> Component:
         """
         Executes the node by rendering its layout with the provided variables,
         slots, and views.
         """
-        slots_content = await self._handle_slots_async()
-        views_content = await self._handle_child_async()
-
-        combined_kwargs = {**self.variables, **slots_content, **views_content}
         segment_key = self.segment
 
         if self.path_template:
@@ -143,6 +140,22 @@ class ExecNode:
             segment_key = create_pathtemplate_key(
                 self.segment, self.path_template, path_variable, path_key
             )
+
+        segment_loading_state = self.loading_state.get(segment_key)
+        if self.loading is not None and is_init:
+            print("Segment is lacy: ", segment_key, flush=True)
+
+            self.loading_state[segment_key] = "lacy"
+            if callable(self.loading):
+                loading_layout = await self.loading()
+            else:
+                loading_layout = self.loading
+
+            return LacyContainer(loading_layout, self.segment)
+
+        slots_content = await self._handle_slots_async()
+        views_content = await self._handle_child_async()
+        combined_kwargs = {**self.variables, **slots_content, **views_content}
 
         self.loading_state[segment_key] = True
         if callable(self.layout):
@@ -188,7 +201,7 @@ class ExecNode:
             try:
                 layout = self.layout(**combined_kwargs)
             except Exception as e:
-                layout = html.Div(str(e))
+                layout = html.Div(str(e), className="banner")
             return layout
 
         return self.layout
