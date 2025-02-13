@@ -2,6 +2,7 @@ import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List
+from uuid import UUID
 
 from dash import html
 from dash.development.base_component import Component
@@ -40,6 +41,7 @@ class RouteConfig(BaseModel):
 
 
 class PageNode(BaseModel):
+    node_id: UUID
     layout: Callable | Component
     module: str
     segment: str
@@ -117,6 +119,7 @@ class ExecNode:
 
     layout: Callable[..., Component] | Component
     segment: str  # Added to keep track of the current segment
+    node_id: UUID
     parent_segment: str
     loading_state: Dict[str, bool]
     path: str
@@ -141,7 +144,7 @@ class ExecNode:
                 self.segment, self.path_template, path_variable, path_key
             )
 
-        segment_loading_state = self.loading_state.get(segment_key)
+        segment_loading_state = self.loading_state.get(segment_key, False)
         if self.loading is not None:
             if is_init and not segment_loading_state:
                 self.loading_state[segment_key] = "lacy"
@@ -150,7 +153,7 @@ class ExecNode:
                 else:
                     loading_layout = self.loading
 
-                return LacyContainer(loading_layout, self.segment)
+                return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
         slots_content = await self._handle_slots_async()
         views_content = await self._handle_child_async()

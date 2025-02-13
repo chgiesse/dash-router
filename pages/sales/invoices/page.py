@@ -22,7 +22,7 @@ async def layout(invoice=SlotContainer, overview=SlotContainer, **kwargs):
             ),
             dmc.Stack(
                 [
-                    invoice,
+                    dmc.Box(invoice, mih=50),
                     dmc.Alert(
                         "This is still the invoices section",
                         title="Invoices section!",

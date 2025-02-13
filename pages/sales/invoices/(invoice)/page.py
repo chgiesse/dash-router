@@ -1,3 +1,5 @@
+import asyncio
+
 import dash_mantine_components as dmc
 
 from helpers import get_icon
@@ -12,7 +14,6 @@ config = RouteConfig(path_template="<invoice_id>", default_child="items")
 
 async def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
     # def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
-    # await asyncio.sleep(1.2)
     if not invoice_id:
         return dmc.Stack(
             [
@@ -21,6 +22,8 @@ async def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
             ],
             align="center",
         )
+
+    await asyncio.sleep(1.2)
     return dmc.Stack(
         [
             dmc.Title("Invoice ID: " + str(invoice_id), order=2),
