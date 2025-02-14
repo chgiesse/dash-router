@@ -1,5 +1,3 @@
-import asyncio
-
 import dash_mantine_components as dmc
 
 from helpers import get_icon
@@ -23,7 +21,7 @@ async def layout(children: ChildContainer, invoice_id: int = None, **kwargs):
             align="center",
         )
 
-    await asyncio.sleep(1.2)
+    # await asyncio.sleep(1.2)
     return dmc.Stack(
         [
             dmc.Title("Invoice ID: " + str(invoice_id), order=2),

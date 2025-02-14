@@ -147,7 +147,7 @@ class ExecNode:
         segment_loading_state = self.loading_state.get(segment_key, False)
         if self.loading is not None:
             if is_init and not segment_loading_state:
-                self.loading_state[segment_key] = "lacy"
+                self.loading_state[segment_key] = True
                 if callable(self.loading):
                     loading_layout = await self.loading()
                 else:

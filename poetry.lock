@@ -337,22 +337,22 @@ testing = ["beautifulsoup4 (>=4.8.2)", "cryptography", "dash-testing-stub (>=0.0
 
 [[package]]
 name = "dash-flash"
-version = "0.1.1b6"
+version = "0.1.2rc1"
 description = "Flash - async port of the Dash framework"
 optional = false
 python-versions = ">=3.12,<4.0"
 files = [
-    {file = "dash_flash-0.1.1b6.tar.gz", hash = "sha256:792b7b717e45f85f050fc2f84e25573a7b74cc8245eab18109322ee0f8f312c9"},
+    {file = "dash_flash-0.1.2rc1.tar.gz", hash = "sha256:eb88bebb099901ce0308c12cc9d3ff9278110f8db7368c5af1602c393898600e"},
 ]
 
 [package.dependencies]
-dash = "<3.1"
+dash = "3.0.0rc1"
 Quart = ">=0.19.9,<0.20.0"
 quart-compress = ">=0.2.1,<0.3.0"
 
 [package.source]
 type = "file"
-url = "../../flash/flash-package/dist/dash_flash-0.1.1b6.tar.gz"
+url = "../../flash/flash-package/dist/dash_flash-0.1.2rc1.tar.gz"
 
 [[package]]
 name = "dash-iconify"
@@ -1003,4 +1003,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "9f0c07fd3c50fa9f5484e8821de7bd4e49b417ac96744057947f7009ca1e0ab5"
+content-hash = "bfbbd4a3ccf016143a80bd2e8e04be2ebb9a5843cbe33504dc6d7f4fd4a5a830"

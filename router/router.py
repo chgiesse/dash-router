@@ -9,7 +9,7 @@ from dash import Dash, html
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash.development.base_component import Component
-from flash import MATCH, Flash, Input, Output, State, no_update, set_props
+from flash import MATCH, Flash, Input, Output, State, set_props
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import request
 
@@ -53,8 +53,6 @@ class Router:
 
         self.setup_route_tree()
         self.setup_lacy_callback()
-
-        print(self.route_table, flush=True)
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
@@ -595,8 +593,62 @@ class Router:
             return self._build_response(container_id, final_layout, new_loading_state)
 
     def setup_lacy_callback(self):
+        @self.app.server.before_request
+        async def load_lacy():
+            request_data = await request.get_data()
+            if not request_data:
+                return
+
+            body = json.loads(request_data)
+            component_id = body.get("outputs").get("id")
+            if not isinstance(component_id, dict):
+                return
+            component_type = component_id.get("type")
+
+            if not component_type == LacyContainer.ids.container("none").get("type"):
+                return
+
+            node_id = UUID(component_id.get("index"))
+            inputs = body.get("inputs", [])
+            state = body.get("state", [])
+            args = inputs_to_vals(inputs + state)
+            _, children, variables, pathname_, search_, loading_state_ = args
+            query_parameters = _parse_query_string(search_)
+            node_variables = json.loads(variables)
+
+            path = self.strip_relative_path(pathname_)
+
+            lacy_node = self.route_table.get(node_id)
+            exec_tree = self.build_execution_tree(
+                current_node=lacy_node,
+                segments=[],
+                parent_variables=node_variables,
+                query_params=query_parameters,
+                loading_state=loading_state_,
+                request_pathname=path,
+            )
+
+            layout = await exec_tree.execute_async(is_init=True)
+            container_id = RootContainer.ids.container
+            if lacy_node.parent_segment != "/":
+                if lacy_node.is_slot:
+                    container_id = json.dumps(
+                        SlotContainer.ids.container(
+                            lacy_node.parent_segment, lacy_node.segment
+                        )
+                    )
+                else:
+                    container_id = json.dumps(
+                        ChildContainer.ids.container(lacy_node.parent_segment)
+                    )
+
+            return self._build_response(
+                container_id, layout, exec_tree.loading_state, True
+            )
+
         @self.app.callback(
             Output(LacyContainer.ids.container(MATCH), "children"),
+            Input(LacyContainer.ids.container(MATCH), "children"),
             Input(LacyContainer.ids.container(MATCH), "id"),
             Input(LacyContainer.ids.container(MATCH), "data-path"),
             State(RootContainer.ids.location, "pathname"),
@@ -604,60 +656,15 @@ class Router:
             State(RootContainer.ids.state_store, "data"),
         )
         async def load_lacy_component(
-            lacy_segment_id, variables, pathname, search, loading_state
+            children, lacy_segment_id, variables, pathname, search, loading_state
         ):
-            query_parameters = _parse_query_string(search)
-            node_id = UUID(lacy_segment_id["index"])
-            node_variables = json.loads(variables)
+            pass
 
-            path = self.strip_relative_path(pathname)
-
-            lacy_node = self.route_table.get(node_id)
-            exec_node = ExecNode(
-                node_id=lacy_node.node_id,
-                layout=lacy_node.layout,
-                segment=lacy_node.segment,
-                parent_segment=lacy_node.parent_segment,
-                variables=node_variables,
-                loading_state=loading_state,
-                path_template=lacy_node.path_template,
-                loading=None,
-                error=lacy_node.error,
-                path=path,
-            )
-
-            exec_tree = self.build_execution_tree(
-                current_node=lacy_node,
-                segments=[],
-                parent_variables=node_variables,
-                query_params=query_parameters,
-                loading_state=loading_state,
-                request_pathname=path,
-            )
-
-            layout = await exec_tree.execute_async(is_init=True)
-            #
-            # if not exec_tree:
-            #     loading_state.pop(lacy_segment, None)
-            #     return html.H1("404 - Page not found")
-            #
-            # final_layout = await exec_tree.execute_async(is_init=False)
-            # new_loading_state = {**updated_segments, **exec_tree.loading_state}
-            #
-            # new_loading_state[lacy_segment] = True
-            # print(
-            #     "New loading_state callback: ",
-            #     lacy_segment,
-            #     " : ",
-            #     new_loading_state,
-            #     flush=True,
-            # )
-            print("NODE: ", exec_tree, flush=True)
-            # print("EXEC TREE", exec_tree, flush=True)
-            # print("LAYOUT: ", layout, flush=True)
-            print("loading state callback: ", exec_tree.loading_state, flush=True)
-            set_props(RootContainer.ids.state_store, {"data": exec_tree.loading_state})
-
-            return layout
-
-            return no_update
+        # @self.app.callback(
+        #     Output(RootContainer.ids.container, "id"),
+        #     Input(LacyContainer.ids.container(ALL), "id"),
+        #     Input(LacyContainer.ids.container(ALL), "children"),
+        #     Input(LacyContainer.ids.container(ALL), "data-path"),
+        # )
+        # async def load_lacy_component_all(lacy_segment_id, children, variables):
+        #     return no_update

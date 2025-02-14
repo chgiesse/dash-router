@@ -11,8 +11,8 @@ python = "^3.12"
 dash-mantine-components = "1.0.0rc1"
 pydantic = "^2.10.4"
 dash = "3.0.0rc1"
-dash-flash = {path = "/Users/cgiessel/Documents/projects/flash/flash-package/dist/dash_flash-0.1.1b6.tar.gz"}
 dash-iconify = "^0.1.2"
+dash-flash = {path = "/Users/cgiessel/Documents/projects/flash/flash-package/dist/dash_flash-0.1.2rc1.tar.gz"}
 
 
 [build-system]
