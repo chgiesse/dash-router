@@ -269,6 +269,7 @@ async def layout(cid: str, other_id: str, **kwargs):
 ## Error Layouts
 - Add `error.py` file to your route folder with DashComponent or function named layout for custom error handling 
 - Layout receives the exception as well as the path variables and search params the layout used 
+- A basic red card with the error message gets displayed by default
 ```python 
 import dash_mantine_components as dmc
 
