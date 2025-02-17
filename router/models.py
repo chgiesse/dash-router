@@ -155,14 +155,16 @@ class ExecNode:
 
                 return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
-        slots_content = await self._handle_slots_async()
-        views_content = await self._handle_child_async()
-        combined_kwargs = {**self.variables, **slots_content, **views_content}
+        slots_content, views_content = await asyncio.gather(
+            self._handle_slots_async(), self._handle_child_async()
+        )
 
         self.loading_state[segment_key] = True
         if callable(self.layout):
             try:
-                layout = await self.layout(**combined_kwargs)
+                layout = await self.layout(
+                    **self.variables, **slots_content, **views_content
+                )
             except Exception as e:
                 layout = self.handle_error(e, self.variables)
             return layout
