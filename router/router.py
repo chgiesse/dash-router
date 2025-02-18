@@ -51,7 +51,8 @@ class Router:
             )
 
         self.setup_route_tree()
-        self.setup_lacy_callback()
+        # self.setup_lacy_callback()
+        print(self.route_table, flush=True)
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
@@ -115,10 +116,10 @@ class Router:
             if new_node.is_static:
                 self.static_routes.register_root_route(new_node)
 
-            if new_node.is_root:
+            elif new_node.is_root:
                 self.dynamic_routes.register_root_route(new_node)
 
-            if new_node.is_slot:
+            elif new_node.is_slot:
                 parent_node.register_slot(new_node)
 
             else:
@@ -247,7 +248,7 @@ class Router:
                 updated_segments[key] = True
                 continue
 
-            child_node = active_node.get_child_node(segment)
+            child_node = active_node.get_child_node(segment, self.route_table)
             if not child_node:
                 if not self.ignore_empty_folders and len(remaining_segments) > 1:
                     first = remaining_segments.pop(0)
@@ -349,14 +350,15 @@ class Router:
     ) -> ExecNode | None:
         """Handles processing of a child view node."""
         next_segment = segments[0] if segments else None
-        child_node = current_node.child_nodes.get(next_segment)
-        if not child_node:
+        child_node_id = current_node.child_nodes.get(next_segment)
+        if not child_node_id:
             default_segment = current_node.default_child
-            child_node = current_node.child_nodes.get(default_segment, None)
+            child_node_id = current_node.child_nodes.get(default_segment, None)
 
-        if child_node:
+        if child_node_id:
             if segments:
                 segments = segments[1:]
+            child_node = self.route_table.get(child_node_id)
             return self.build_execution_tree(
                 current_node=child_node,
                 segments=segments.copy(),
@@ -378,7 +380,8 @@ class Router:
     ) -> Dict[str, ExecNode]:
         """Processes all slot nodes defined on the current node."""
         slot_exec_nodes: Dict[str, ExecNode] = {}
-        for slot_name, slot_node in current_node.slots.items():
+        for slot_name, slot_id in current_node.slots.items():
+            slot_node = self.route_table.get(slot_id)
             slot_exec_nodes[slot_name] = self.build_execution_tree(
                 current_node=slot_node,
                 segments=segments.copy(),
@@ -445,9 +448,6 @@ class Router:
 
         final_layout = await exec_tree.execute_async(is_init)
         new_loading_state = {**updated_segments, **exec_tree.loading_state}
-        # print("New loading_state dispatch: ", new_loading_state, flush=True)
-        # print(active_node, flush=True)
-        # print("New loading state: ", new_loading_state, flush=True)
         container_id = RootContainer.ids.container
         if active_node.parent_segment != "/":
             if active_node.is_slot:
@@ -476,7 +476,6 @@ class Router:
         Wraps a rendered layout and optional state into a RouterResponse model.
         """
         if not is_init:
-            print("UPDATE LOADING STATE CALLBACK ", loading_state, flush=True)
             set_props(RootContainer.ids.state_store, {"data": loading_state or {}})
             return layout
         rendered_layout = recursive_to_plotly_json(layout)
@@ -505,7 +504,6 @@ class Router:
             args = inputs_to_vals(inputs + state)
             pathname_, search_, loading_state_ = args
             query_parameters = _parse_query_string(search_)
-            print("Input loading_state: ", loading_state_, flush=True)
 
             return await self.dispatch(pathname_, query_parameters, loading_state_)
 

@@ -51,9 +51,9 @@ class PageNode(BaseModel):
     is_slot: bool = False
     is_static: bool = True
     is_root: bool | None = None
-    child_nodes: Dict[str, "PageNode"] = Field(default_factory=dict)
+    child_nodes: Dict[str, UUID] = Field(default_factory=dict)
     default_child: str | None = None
-    slots: Dict[str, "PageNode"] = Field(default_factory=dict)
+    slots: Dict[str, UUID] = Field(default_factory=dict)
     loading: Callable | Component | None = None
     error: Callable | Component | None = None
 
@@ -64,23 +64,24 @@ class PageNode(BaseModel):
         if node.segment in self.slots:
             raise KeyError(f"{node.segment} is already registered as slot!")
 
-        self.slots[node.segment] = node
+        self.slots[node.segment] = node.node_id
 
     def register_route(self, node: "PageNode"):
         if node.segment in self.slots:
             raise KeyError(f"{node.segment} is already registered as parallel route!!")
 
-        self.child_nodes[node.segment] = node
+        self.child_nodes[node.segment] = node.node_id
 
-    def get_child_node(self, segment: str):
-        # only parallel routes can be matched directly
-        if child_node := self.child_nodes.get(segment):
-            return child_node
-
-        # if no parallel route is found, search slots for view or path templates
-        for slot_name, slot_node in self.slots.items():
-            if slot_node.path_template:
+    def get_child_node(self, segment: str, route_table: Dict[UUID, "PageNode"]):
+        # Try to match a parallel child first
+        if child_id := self.child_nodes.get(segment):
+            return route_table.get(child_id)
+        # Otherwise, check the slots for a node with a path template
+        for slot_id in self.slots.values():
+            slot_node = route_table.get(slot_id)
+            if slot_node and slot_node.path_template:
                 return slot_node
+        return None
 
     def load_config(self, config: RouteConfig):
         config = config or RouteConfig()
