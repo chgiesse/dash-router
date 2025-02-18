@@ -5,11 +5,11 @@ import traceback
 from typing import Any, Callable, Dict, List, Literal, Tuple, Union
 from uuid import UUID, uuid4
 
-from dash import Dash, html
+from dash import html
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash.development.base_component import Component
-from flash import MATCH, Flash, Input, Output, State, set_props
+from flash import Flash, Input, Output, State, set_props
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import request
 
@@ -39,20 +39,14 @@ class Router:
         self.ignore_empty_folders = ignore_empty_folders
         self.pages_folder = app.pages_folder if app.pages_folder else pages_folder
 
-        if isinstance(self.app, Dash):
-            self.is_async = False
-            self.setup_router_sync()
-        elif isinstance(self.app, Flash):
-            self.is_async = True
-            self.setup_router_async()
-        else:
+        if not isinstance(self.app, Flash):
             raise TypeError(
                 f"App needs to be of type Dash or flash not: {type(self.app)}"
             )
 
         self.setup_route_tree()
+        self.setup_router()
         # self.setup_lacy_callback()
-        print(self.route_table, flush=True)
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
@@ -446,7 +440,7 @@ class Router:
                 is_init,
             )
 
-        final_layout = await exec_tree.execute_async(is_init)
+        final_layout = await exec_tree.execute(is_init)
         new_loading_state = {**updated_segments, **exec_tree.loading_state}
         container_id = RootContainer.ids.container
         if active_node.parent_segment != "/":
@@ -485,7 +479,7 @@ class Router:
         return RouterResponse(multi=True, response=response).model_dump()
 
     # ─── ASYNC & SYNC ROUTER SETUP ───────────────────────────────────────────────────
-    def setup_router_async(self) -> None:
+    def setup_router(self) -> None:
         @self.app.server.before_request
         async def router():
             request_data = await request.get_data()
@@ -524,78 +518,6 @@ class Router:
             ):
                 pass
 
-    def setup_router_sync(self) -> None:
-        @self.app.server.before_request
-        def router():
-            request_data = request.get_data()
-            if not request_data:
-                return
-
-            body = json.loads(request_data)
-            changed_prop = body["changedPropIds"]
-            changed_prop_id = changed_prop[0].split(".")[0] if changed_prop else None
-
-            if changed_prop_id != RootContainer.ids.location:
-                return
-
-            inputs = body.get("inputs", [])
-            state = body.get("state", [])
-            args = inputs_to_vals(inputs + state)
-            pathname_, search_, loading_state_ = args
-            query_parameters = _parse_query_string(search_)
-
-            if pathname_ == "/" or not pathname_:
-                node = self.static_routes.get_route("/")
-                layout = node.layout(**query_parameters)
-                return self._build_response(RootContainer.ids.container, layout)
-
-            path = self.strip_relative_path(pathname_)
-            static_route, path_variables = self.get_static_route(path)
-            if static_route:
-                layout = static_route.layout(
-                    **query_parameters, **(path_variables or {})
-                )
-                return self._build_response(RootContainer.ids.container, layout)
-
-            init_segments = [seg for seg in pathname_.strip("/").split("/") if seg]
-            active_node, remaining_segments, updated_segments, path_vars = (
-                self._get_root_node(init_segments, loading_state_)
-            )
-            if not active_node:
-                return self._build_response(
-                    RootContainer.ids.container, html.H1("404 - Page not found")
-                )
-
-            exec_tree = self.build_execution_tree(
-                current_node=active_node,
-                segments=remaining_segments,
-                parent_variables=path_vars,
-                query_params=query_parameters,
-                loading_state=updated_segments,
-                request_pathname=path,
-            )
-            if not exec_tree:
-                return self._build_response(
-                    RootContainer.ids.container, html.H1("404 - Page not found")
-                )
-
-            final_layout = exec_tree.execute_sync()
-            new_loading_state = {**updated_segments, **exec_tree.loading_state}
-            container_id = RootContainer.ids.container
-            if active_node.parent_segment != "/":
-                if active_node.is_slot:
-                    container_id = json.dumps(
-                        SlotContainer.ids.container(
-                            active_node.parent_segment, active_node.segment
-                        )
-                    )
-                else:
-                    container_id = json.dumps(
-                        ChildContainer.ids.container(active_node.parent_segment)
-                    )
-
-            return self._build_response(container_id, final_layout, new_loading_state)
-
     def setup_lacy_callback(self):
         @self.app.server.before_request
         async def load_lacy():
@@ -632,7 +554,7 @@ class Router:
                 request_pathname=path,
             )
 
-            layout = await exec_tree.execute_async(is_init=True)
+            layout = await exec_tree.execute(is_init=True)
             container_id = RootContainer.ids.container
             if lacy_node.parent_segment != "/":
                 if lacy_node.is_slot:
@@ -650,19 +572,19 @@ class Router:
                 container_id, layout, exec_tree.loading_state, True
             )
 
-        @self.app.callback(
-            Output(LacyContainer.ids.container(MATCH), "children"),
-            Input(LacyContainer.ids.container(MATCH), "children"),
-            Input(LacyContainer.ids.container(MATCH), "id"),
-            Input(LacyContainer.ids.container(MATCH), "data-path"),
-            State(RootContainer.ids.location, "pathname"),
-            State(RootContainer.ids.location, "search"),
-            State(RootContainer.ids.state_store, "data"),
-        )
-        async def load_lacy_component(
-            children, lacy_segment_id, variables, pathname, search, loading_state
-        ):
-            pass
+        # @self.app.callback(
+        #     Output(LacyContainer.ids.container(MATCH), "children"),
+        #     Input(LacyContainer.ids.container(MATCH), "children"),
+        #     Input(LacyContainer.ids.container(MATCH), "id"),
+        #     Input(LacyContainer.ids.container(MATCH), "data-path"),
+        #     State(RootContainer.ids.location, "pathname"),
+        #     State(RootContainer.ids.location, "search"),
+        #     State(RootContainer.ids.state_store, "data"),
+        # )
+        # async def load_lacy_component(
+        #     children, lacy_segment_id, variables, pathname, search, loading_state
+        # ):
+        #     pass
 
         # @self.app.callback(
         #     Output(RootContainer.ids.container, "id"),

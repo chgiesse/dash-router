@@ -131,7 +131,7 @@ class ExecNode:
     loading: Callable | Component | None = None
     error: Callable | Component | None = None
 
-    async def execute_async(self, is_init: bool = True) -> Component:
+    async def execute(self, is_init: bool = True) -> Component:
         """
         Executes the node by rendering its layout with the provided variables,
         slots, and views.
@@ -157,7 +157,7 @@ class ExecNode:
                 return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
         slots_content, views_content = await asyncio.gather(
-            self._handle_slots_async(), self._handle_child_async()
+            self._handle_slots(), self._handle_child()
         )
 
         self.loading_state[segment_key] = True
@@ -183,55 +183,12 @@ class ExecNode:
             return self.error
         return html.Div(str(error), className="banner")
 
-    def execute_sync(self) -> Component:
-        """
-        Executes the node by rendering its layout with the provided variables,
-        slots, and views.
-        """
-        slots_content = self._handle_slots_sync()
-        views_content = self._handle_child_sync()
-
-        combined_kwargs = {**self.variables, **slots_content, **views_content}
-        segment_key = self.segment
-
-        if self.path_template:
-            path_key = self.path_template.strip("<>")
-            path_variable = self.variables.get(path_key)
-            segment_key = create_pathtemplate_key(
-                self.segment, self.path_template, path_variable, path_key
-            )
-
-        self.loading_state[segment_key] = True
-        if callable(self.layout):
-            try:
-                layout = self.layout(**combined_kwargs)
-            except Exception as e:
-                layout = html.Div(str(e), className="banner")
-            return layout
-
-        return self.layout
-
-    def _handle_slots_sync(self) -> Dict[str, Component]:
-        if self.slots:
-            views = [slot.execute_sync() for slot in self.slots.values()]
-            results = {}
-
-            for slot_name, slot_layout in zip(self.slots.keys(), views):
-                clean_slot_name = slot_name.strip("()")
-                results[clean_slot_name] = SlotContainer(
-                    slot_layout, self.segment, slot_name
-                )
-
-            return results
-
-        return {}
-
-    async def _handle_slots_async(self) -> Dict[str, Component]:
+    async def _handle_slots(self) -> Dict[str, Component]:
         """
         Executes all slot nodes and gathers their rendered components.
         """
         if self.slots:
-            executables = [slot.execute_async() for slot in self.slots.values()]
+            executables = [slot.execute() for slot in self.slots.values()]
             views = await asyncio.gather(*executables)
             results = {}
 
@@ -245,13 +202,13 @@ class ExecNode:
 
         return {}
 
-    async def _handle_child_async(self) -> Dict[str, Component]:
+    async def _handle_child(self) -> Dict[str, Component]:
         """
         Executes the current view node.
         """
         if self.child_node:
             _, child_node = next(iter(self.child_node.items()))
-            layout = await child_node.execute_async() if child_node else None
+            layout = await child_node.execute() if child_node else None
             return {
                 "children": ChildContainer(
                     layout, self.segment, child_node.segment if child_node else None
@@ -260,13 +217,98 @@ class ExecNode:
 
         return {}
 
-    def _handle_child_sync(self) -> Dict[str, Component]:
+
+@dataclass
+class SyncExecNode:
+    """Represents a node in the execution tree"""
+
+    layout: Callable[..., Component] | Component
+    segment: str  # Added to keep track of the current segment
+    node_id: UUID
+    parent_segment: str
+    loading_state: Dict[str, bool]
+    path: str
+    variables: Dict[str, str] = field(default_factory=dict)
+    slots: Dict[str, "ExecNode"] = field(default_factory=dict)
+    child_node: Dict[str, "ExecNode"] = field(default_factory=dict)
+    path_template: str | None = None
+    loading: Callable | Component | None = None
+    error: Callable | Component | None = None
+
+    def execute(self, is_init: bool = True) -> Component:
+        """
+        Executes the node by rendering its layout with the provided variables,
+        slots, and views.
+        """
+        segment_key = self.segment
+
+        if self.path_template:
+            path_key = self.path_template.strip("<>")
+            path_variable = self.variables.get(path_key)
+            segment_key = create_pathtemplate_key(
+                self.segment, self.path_template, path_variable, path_key
+            )
+
+        segment_loading_state = self.loading_state.get(segment_key, False)
+        if self.loading is not None:
+            if is_init and not segment_loading_state:
+                self.loading_state[segment_key] = True
+                if callable(self.loading):
+                    loading_layout = self.loading()
+                else:
+                    loading_layout = self.loading
+
+                return LacyContainer(loading_layout, str(self.node_id), self.variables)
+
+        views_content = self._handle_child()
+        slots_content = self._handle_slots()
+
+        self.loading_state[segment_key] = True
+        if callable(self.layout):
+            try:
+                layout = self.layout(**self.variables, **slots_content, **views_content)
+            except Exception as e:
+                layout = self.handle_error(e, self.variables)
+            return layout
+
+        return self.layout
+
+    def handle_error(self, error: Exception, variables: Dict[str, any]):
+        if self.error:
+            if callable(self.error):
+                layout = self.error(
+                    error,
+                    variables,
+                )
+                return layout
+            return self.error
+        return html.Div(str(error), className="banner")
+
+    def _handle_slots(self) -> Dict[str, Component]:
+        """
+        Executes all slot nodes and gathers their rendered components.
+        """
+        if self.slots:
+            views = [slot.execute() for slot in self.slots.values()]
+            results = {}
+
+            for slot_name, slot_layout in zip(self.slots.keys(), views):
+                clean_slot_name = slot_name.strip("()")
+                results[clean_slot_name] = SlotContainer(
+                    slot_layout, self.segment, slot_name
+                )
+
+            return results
+
+        return {}
+
+    def _handle_child(self) -> Dict[str, Component]:
         """
         Executes the current view node.
         """
         if self.child_node:
             _, child_node = next(iter(self.child_node.items()))
-            layout = child_node.execute_sync() if child_node else None
+            layout = child_node.execute() if child_node else None
             return {
                 "children": ChildContainer(
                     layout, self.segment, child_node.segment if child_node else None
