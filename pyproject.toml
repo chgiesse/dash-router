@@ -1,8 +1,9 @@
 [tool.poetry]
-name = "dash-router"
-version = "0.1.0-beta.1"
+name = "flash-router"
+version = "0.1.0-beta.2"
 description = "File-system based router for Dash and Flash applications."
-authors = ["Christian Giessel <cgiessel@tesla.com>"]
+authors = ["chgiesse"]
+repository = "https://github.com/chgiesse/dash-router"
 license = "MIT"
 readme = "README.md"
 packages = [
