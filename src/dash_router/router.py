@@ -9,7 +9,7 @@ from dash import html
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash.development.base_component import Component
-from flash import Flash, Input, Output, State, set_props
+from flash import MATCH, Flash, Input, Output, State, set_props
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import request
 
@@ -44,7 +44,7 @@ class Router:
 
         self.setup_route_tree()
         self.setup_router()
-        # self.setup_lacy_callback()
+        self.setup_lacy_callback()
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
@@ -548,7 +548,7 @@ class Router:
                 request_pathname=path,
             )
 
-            layout = await exec_tree.execute(is_init=True)
+            layout = await exec_tree.execute(is_init=False)
             container_id = RootContainer.ids.container
             if lacy_node.parent_segment != "/":
                 if lacy_node.is_slot:
@@ -566,25 +566,18 @@ class Router:
                 container_id, layout, exec_tree.loading_state, True
             )
 
-        # @self.app.callback(
-        #     Output(LacyContainer.ids.container(MATCH), "children"),
-        #     Input(LacyContainer.ids.container(MATCH), "children"),
-        #     Input(LacyContainer.ids.container(MATCH), "id"),
-        #     Input(LacyContainer.ids.container(MATCH), "data-path"),
-        #     State(RootContainer.ids.location, "pathname"),
-        #     State(RootContainer.ids.location, "search"),
-        #     State(RootContainer.ids.state_store, "data"),
-        # )
-        # async def load_lacy_component(
-        #     children, lacy_segment_id, variables, pathname, search, loading_state
-        # ):
-        #     pass
-
-        # @self.app.callback(
-        #     Output(RootContainer.ids.container, "id"),
-        #     Input(LacyContainer.ids.container(ALL), "id"),
-        #     Input(LacyContainer.ids.container(ALL), "children"),
-        #     Input(LacyContainer.ids.container(ALL), "data-path"),
-        # )
-        # async def load_lacy_component_all(lacy_segment_id, children, variables):
-        #     return no_update
+        @self.app.server.before_serving
+        async def trigger_lacy():
+            @self.app.callback(
+                Output(LacyContainer.ids.container(MATCH), "children"),
+                Input(LacyContainer.ids.container(MATCH), "children"),
+                Input(LacyContainer.ids.container(MATCH), "id"),
+                Input(LacyContainer.ids.container(MATCH), "data-path"),
+                State(RootContainer.ids.location, "pathname"),
+                State(RootContainer.ids.location, "search"),
+                State(RootContainer.ids.state_store, "data"),
+            )
+            async def load_lacy_component(
+                children, lacy_segment_id, variables, pathname, search, loading_state
+            ):
+                pass

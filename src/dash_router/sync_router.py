@@ -44,7 +44,7 @@ class SyncRouter:
             )
         self.setup_router()
         self.setup_route_tree()
-        # self.setup_lacy_callback()
+        self.setup_lacy_callback()
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
@@ -206,10 +206,10 @@ class SyncRouter:
         """
         Iterates through URL segments to find the matching root node.
         Returns:
-          - The active PageNode (or None if not found),
-          - The remaining segments,
-          - An updated loading state mapping, and
-          - Any extracted path variables.
+        - The active PageNode (or None if not found),
+        - The remaining segments,
+        - An updated loading state mapping, and
+        - Any extracted path variables.
         """
         remaining_segments = segments.copy()
         updated_segments: Dict[str, bool] = {}
@@ -434,7 +434,7 @@ class SyncRouter:
                 is_init,
             )
 
-        final_layout = exec_tree.execute_async(is_init)
+        final_layout = exec_tree.execute(is_init)
         new_loading_state = {**updated_segments, **exec_tree.loading_state}
         container_id = RootContainer.ids.container
         if active_node.parent_segment != "/":
@@ -494,8 +494,8 @@ class SyncRouter:
 
             return self.dispatch(pathname_, query_parameters, loading_state_)
 
-        @self.app.server.before_first_request
-        def trigger_router():
+        with self.app.server.app_context():
+            
             inputs = {
                 "pathname_": Input(RootContainer.ids.location, "pathname"),
                 "search_": Input(RootContainer.ids.location, "search"),
@@ -562,26 +562,19 @@ class SyncRouter:
             return self._build_response(
                 container_id, layout, exec_tree.loading_state, True
             )
+        
+        with self.app.server.app_context():
 
-        @self.app.callback(
-            Output(LacyContainer.ids.container(MATCH), "children"),
-            Input(LacyContainer.ids.container(MATCH), "children"),
-            Input(LacyContainer.ids.container(MATCH), "id"),
-            Input(LacyContainer.ids.container(MATCH), "data-path"),
-            State(RootContainer.ids.location, "pathname"),
-            State(RootContainer.ids.location, "search"),
-            State(RootContainer.ids.state_store, "data"),
-        )
-        def load_lacy_component(
-            children, lacy_segment_id, variables, pathname, search, loading_state
-        ):
-            pass
-
-        # @self.app.callback(
-        #     Output(RootContainer.ids.container, "id"),
-        #     Input(LacyContainer.ids.container(ALL), "id"),
-        #     Input(LacyContainer.ids.container(ALL), "children"),
-        #     Input(LacyContainer.ids.container(ALL), "data-path"),
-        # )
-        # async def load_lacy_component_all(lacy_segment_id, children, variables):
-        #     return no_update
+            @self.app.callback(
+                Output(LacyContainer.ids.container(MATCH), "children"),
+                Input(LacyContainer.ids.container(MATCH), "children"),
+                Input(LacyContainer.ids.container(MATCH), "id"),
+                Input(LacyContainer.ids.container(MATCH), "data-path"),
+                State(RootContainer.ids.location, "pathname"),
+                State(RootContainer.ids.location, "search"),
+                State(RootContainer.ids.state_store, "data"),
+            )
+            def load_lacy_component(
+                children, lacy_segment_id, variables, pathname, search, loading_state
+            ):
+                pass
