@@ -342,45 +342,17 @@ description = "Flash - async port of the Dash framework"
 optional = false
 python-versions = ">=3.12,<4.0"
 files = [
-    {file = "dash_flash-0.1.2rc1.tar.gz", hash = "sha256:eb88bebb099901ce0308c12cc9d3ff9278110f8db7368c5af1602c393898600e"},
+    {file = "dash_flash-0.1.2rc1.tar.gz", hash = "sha256:bde0f6861b171962af045e6186223cb07912c042f7e3e6a0dbb801865497cc9c"},
 ]
 
 [package.dependencies]
-dash = "3.0.0rc1"
+dash = ">=3.0.0rc1,<4.0.0"
 Quart = ">=0.19.9,<0.20.0"
 quart-compress = ">=0.2.1,<0.3.0"
 
 [package.source]
 type = "file"
 url = "../../flash/flash-package/dist/dash_flash-0.1.2rc1.tar.gz"
-
-[[package]]
-name = "dash-iconify"
-version = "0.1.2"
-description = "Iconify for Plotly Dash"
-optional = false
-python-versions = "*"
-files = [
-    {file = "dash_iconify-0.1.2-py3-none-any.whl", hash = "sha256:9ab0eda19bb4514e177bf1f8f36947bb9e5b44aba6ce947f22a1cf0f1a45fc14"},
-    {file = "dash_iconify-0.1.2.tar.gz", hash = "sha256:564774be6b11b0ac3a8999b7137c3d17a1d351d69b673aa313c7228eacc9d143"},
-]
-
-[[package]]
-name = "dash-mantine-components"
-version = "1.0.0rc1"
-description = "Plotly Dash Components based on Mantine"
-optional = false
-python-versions = "*"
-files = [
-    {file = "dash_mantine_components-1.0.0rc1-py3-none-any.whl", hash = "sha256:260a3750eb035c21bc7e6806dcafb8d5c2061ce50551ff6ff7d4a1878b34f17d"},
-    {file = "dash_mantine_components-1.0.0rc1.tar.gz", hash = "sha256:a97d4ca78c90d37b63709439529d64de79e23047b4d8c97640625fb1cfcf4a22"},
-]
-
-[package.dependencies]
-dash = ">=2"
-
-[package.extras]
-dev = ["black", "build", "dash[ci,dev,testing] (>=2)", "pytest (<8.1.0)", "pyyaml (>=5.0)", "selenium (<4.3.0)", "wheel"]
 
 [[package]]
 name = "flask"
@@ -1003,4 +975,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "bfbbd4a3ccf016143a80bd2e8e04be2ebb9a5843cbe33504dc6d7f4fd4a5a830"
+content-hash = "41a460634bb9437f53e593480bd94bc2668ad527eaf1cef4baf578605644265c"

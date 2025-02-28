@@ -9,7 +9,7 @@ from dash import html
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash.development.base_component import Component
-from flash import MATCH, Flash, Input, Output, State, set_props
+from flash import Flash, Input, Output, State, set_props
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import request
 
@@ -44,7 +44,7 @@ class Router:
 
         self.setup_route_tree()
         self.setup_router()
-        self.setup_lacy_callback()
+        # self.setup_lacy_callback()
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
@@ -261,6 +261,11 @@ class Router:
             if child_node.path_template and remaining_segments:
                 if len(remaining_segments) == 1:
                     return active_node, remaining_segments, updated_segments, variables
+                print("Path template: ", child_node.path_template, flush=True)
+                if child_node.path_template == "<...rest>":
+                    variables["rest"] = remaining_segments
+                    return active_node, [], updated_segments, variables
+
                 variables[child_node.path_template.strip("<>")] = segment
 
             updated_segments[key] = True
@@ -285,8 +290,18 @@ class Router:
         if segments and current_node.path_template:
             next_segment = segments[0]
             varname = current_node.path_template.strip("<>")
-            current_variables[varname] = next_segment
             segments = segments[1:]
+            print(current_node.path_template, next_segment, segments, flush=True)
+            if current_node.path_template == "<...rest>":
+                varname = "rest"
+                next_segment = (
+                    [next_segment] + segments
+                    if next_segment != current_node.segment
+                    else segments
+                )
+                segments = []
+
+            current_variables[varname] = next_segment
 
         exec_node = ExecNode(
             node_id=current_node.node_id,
@@ -418,6 +433,7 @@ class Router:
                 {},
                 is_init,
             )
+
         exec_tree = self.build_execution_tree(
             current_node=active_node,
             segments=remaining_segments,
@@ -426,6 +442,7 @@ class Router:
             loading_state=updated_segments,
             request_pathname=path,
         )
+
         if not exec_tree:
             return self._build_response(
                 RootContainer.ids.container,
@@ -566,18 +583,18 @@ class Router:
                 container_id, layout, exec_tree.loading_state, True
             )
 
-        @self.app.server.before_serving
-        async def trigger_lacy():
-            @self.app.callback(
-                Output(LacyContainer.ids.container(MATCH), "children"),
-                Input(LacyContainer.ids.container(MATCH), "children"),
-                Input(LacyContainer.ids.container(MATCH), "id"),
-                Input(LacyContainer.ids.container(MATCH), "data-path"),
-                State(RootContainer.ids.location, "pathname"),
-                State(RootContainer.ids.location, "search"),
-                State(RootContainer.ids.state_store, "data"),
-            )
-            async def load_lacy_component(
-                children, lacy_segment_id, variables, pathname, search, loading_state
-            ):
-                pass
+        # @self.app.server.before_serving
+        # async def trigger_lacy():
+        #     @self.app.callback(
+        #         Output(LacyContainer.ids.container(MATCH), "children"),
+        #         Input(LacyContainer.ids.container(MATCH), "children"),
+        #         Input(LacyContainer.ids.container(MATCH), "id"),
+        #         Input(LacyContainer.ids.container(MATCH), "data-path"),
+        #         State(RootContainer.ids.location, "pathname"),
+        #         State(RootContainer.ids.location, "search"),
+        #         State(RootContainer.ids.state_store, "data"),
+        #     )
+        #     async def load_lacy_component(
+        #         children, lacy_segment_id, variables, pathname, search, loading_state
+        #     ):
+        #         pass
