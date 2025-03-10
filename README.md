@@ -22,6 +22,9 @@ _layout and render example_
 
 ## Conventions & Features
 
+Note: Each level needs a distinct route into the next layer, that means that 
+each level can only have one dynamic route. So a layer can have slots without any path and a nested route 
+
 - `Slots`: Slots are defined by folder names starting and ending with **(_slot_name_)**
 - `Nested Routes`: Nested routes are defined by the foldername
 - `Layouts`: The router is looking for **page.py** files which must contain either a **DashComponent** or **function** named **layout**
