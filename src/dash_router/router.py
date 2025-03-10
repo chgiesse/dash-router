@@ -51,6 +51,17 @@ class Router:
         root_dir = ".".join(self.app.server.name.split(os.sep)[:-1])
         self._traverse_directory(root_dir, self.pages_folder, None)
 
+    def _validate_node(self, node: PageNode):
+        # Validate Slots
+
+        # Validate children
+        if node.default_child:
+            pass
+
+    def _validate_tree(self):
+        for root_node in self.dynamic_routes.routes.items():
+            self._validate_node(root_node)
+
     def _traverse_directory(
         self,
         parent_dir: str,

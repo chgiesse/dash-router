@@ -149,6 +149,7 @@ class ExecNode:
         if self.loading is not None:
             if is_init and not segment_loading_state:
                 self.loading_state[segment_key] = True
+
                 if callable(self.loading):
                     loading_layout = await self.loading()
                 else:
@@ -172,10 +173,10 @@ class ExecNode:
 
         return self.layout
 
-    def handle_error(self, error: Exception, variables: Dict[str, any]):
+    async def handle_error(self, error: Exception, variables: Dict[str, any]):
         if self.error:
             if callable(self.error):
-                layout = self.error(
+                layout = await self.error(
                     error,
                     variables,
                 )

@@ -26,8 +26,11 @@ def recursive_to_plotly_json(component):
     return component
 
 
-def format_segment(segment: str):
-    formatted_segment = segment.strip("()").replace("_", "-").replace(" ", "-")
+def format_segment(segment: str, is_slot: bool = False):
+    if is_slot:
+        formatted_segment = segment.strip("()")
+    else:
+        formatted_segment = segment.replace("_", "-").replace(" ", "-")
 
     return formatted_segment
 
