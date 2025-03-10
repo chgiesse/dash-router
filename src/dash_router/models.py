@@ -167,7 +167,7 @@ class ExecNode:
                     **self.variables, **slots_content, **views_content
                 )
             except Exception as e:
-                layout = self.handle_error(e, self.variables)
+                layout = await self.handle_error(e, self.variables)
             return layout
 
         return self.layout
