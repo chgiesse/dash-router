@@ -16,12 +16,15 @@ def recursive_to_plotly_json(component):
         component = component.to_plotly_json()
         children = component["props"].get("children")
 
-        if isinstance(children, list):
-            component["props"]["children"] = [
-                recursive_to_plotly_json(child) for child in children
-            ]
-        else:
-            component["props"]["children"] = recursive_to_plotly_json(children)
+        for prop_type in component["props"]:
+            prop = component[prop_type]
+
+            if isinstance(prop, list):
+                component["props"]["children"] = [
+                    recursive_to_plotly_json(child) for child in children
+                ]
+            else:
+                component["props"]["children"] = recursive_to_plotly_json(children)
 
     return component
 

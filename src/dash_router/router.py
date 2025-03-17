@@ -113,6 +113,7 @@ class Router:
             relative_path = os.path.relpath(current_dir, self.pages_folder)
             if new_node.path_template:
                 relative_path = f"{relative_path}/{new_node.path_template}"
+            relative_path = format_segment(relative_path)
             new_node.path = relative_path
 
             if new_node.is_static:
@@ -146,7 +147,7 @@ class Router:
         )
 
         is_slot = segment.startswith("(") and segment.endswith(")")
-        formatted_segment = format_segment(segment)
+        formatted_segment = format_segment(segment, is_slot)
         node_id = uuid4()
         new_node = PageNode(
             node_id=node_id,
@@ -272,7 +273,6 @@ class Router:
             if child_node.path_template and remaining_segments:
                 if len(remaining_segments) == 1:
                     return active_node, remaining_segments, updated_segments, variables
-                print("Path template: ", child_node.path_template, flush=True)
                 if child_node.path_template == "<...rest>":
                     variables["rest"] = remaining_segments
                     return active_node, [], updated_segments, variables
@@ -297,12 +297,11 @@ class Router:
         Recursively builds the execution tree for the matched route.
         It extracts any path variables, processes child nodes, and handles slot nodes.
         """
-        current_variables = parent_variables.copy()
+        current_variables = {**parent_variables, **query_params}
         if segments and current_node.path_template:
             next_segment = segments[0]
             varname = current_node.path_template.strip("<>")
             segments = segments[1:]
-            print(current_node.path_template, next_segment, segments, flush=True)
             if current_node.path_template == "<...rest>":
                 varname = "rest"
                 next_segment = (
@@ -337,8 +336,6 @@ class Router:
                 request_pathname,
             )
             exec_node.child_node["children"] = child_exec
-            if not segments:
-                return exec_node
 
         if current_node.slots:
             exec_node.slots = self._process_slot_nodes(
