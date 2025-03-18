@@ -2,7 +2,7 @@ import importlib
 import json
 import os
 import traceback
-from typing import Any, Callable, Dict, List, Literal, Tuple, Union
+from typing import Any, Awaitable, Callable, Dict, List, Literal, Tuple, Union
 from uuid import UUID, uuid4
 
 from dash import html
@@ -12,6 +12,7 @@ from dash.development.base_component import Component
 from flash import Flash, Input, Output, State, set_props
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import request
+import asyncio
 
 from ._utils import (
     create_pathtemplate_key,
@@ -26,7 +27,7 @@ from .models import ExecNode, PageNode, RootNode, RouteConfig, RouterResponse
 class Router:
     def __init__(
         self,
-        app,  # type: Union[Dash, Flash]
+        app: Flash,
         pages_folder: str = "pages",
         requests_pathname_prefix: str | None = None,
         ignore_empty_folders: bool = False,
@@ -137,10 +138,11 @@ class Router:
         page_module_name = path_to_module(current_dir, "page.py")
 
         page_layout = self.import_route_component(current_dir, "page.py")
+        loading_layout = self.import_route_component(current_dir, "loading.py")
+        endpoint = self.import_route_component(current_dir, "api.py", "endpoint")
         error_layout = (
             self.import_route_component(current_dir, "error.py") or self.app._on_error
         )
-        loading_layout = self.import_route_component(current_dir, "loading.py")
         route_config = (
             self.import_route_component(current_dir, "page.py", "config")
             or RouteConfig()
@@ -160,7 +162,8 @@ class Router:
             is_root=is_root,
             error=error_layout,
             loading=loading_layout,
-        )
+            endpoint=endpoint
+        )   
 
         self.route_table[node_id] = new_node
 
@@ -173,8 +176,8 @@ class Router:
     def import_route_component(
         self,
         current_dir: str,
-        file_name: Literal["page.py", "error.py", "loading.py"],
-        component_name: Literal["layout", "config"] = "layout",
+        file_name: Literal["page.py", "error.py", "loading.py", "api.py"],
+        component_name: Literal["layout", "config", 'endpoint'] = "layout",
     ) -> Callable[..., Component] | Component | None:
         page_module_name = path_to_module(current_dir, file_name)
         try:
@@ -292,7 +295,9 @@ class Router:
         query_params: Dict[str, Any],
         loading_state: Dict[str, bool],
         request_pathname: str,
-    ) -> ExecNode | None:
+        endpoints: Dict[UUID, Callable[..., Awaitable[any]]],
+        is_init: bool
+    ) -> Tuple[ExecNode, Dict[UUID, Callable[..., Awaitable[any]]]]:
         """
         Recursively builds the execution tree for the matched route.
         It extracts any path variables, processes child nodes, and handles slot nodes.
@@ -326,6 +331,9 @@ class Router:
             path=request_pathname,
         )
 
+        if current_node.loading and not is_init:
+            endpoints[current_node.node_id] = current_node.endpoint
+
         if current_node.child_nodes:
             child_exec = self._process_child_node(
                 current_node,
@@ -334,6 +342,7 @@ class Router:
                 query_params,
                 loading_state,
                 request_pathname,
+                endpoints
             )
             exec_node.child_node["children"] = child_exec
 
@@ -345,11 +354,12 @@ class Router:
                 query_params,
                 loading_state,
                 request_pathname,
+                endpoints
             )
             if not segments:
-                return exec_node
+                return exec_node, endpoints
 
-        return exec_node
+        return exec_node, endpoints
 
     def _process_child_node(
         self,
@@ -359,10 +369,12 @@ class Router:
         query_params: Dict[str, Any],
         loading_state: Dict[str, bool],
         requests_pathname: str,
+        endpoints: Dict[UUID, Callable[..., Awaitable[any]]]
     ) -> ExecNode | None:
         """Handles processing of a child view node."""
         next_segment = segments[0] if segments else None
         child_node_id = current_node.child_nodes.get(next_segment)
+
         if not child_node_id:
             default_segment = current_node.default_child
             child_node_id = current_node.child_nodes.get(default_segment, None)
@@ -370,6 +382,7 @@ class Router:
         if child_node_id:
             if segments:
                 segments = segments[1:]
+            
             child_node = self.route_table.get(child_node_id)
             return self.build_execution_tree(
                 current_node=child_node,
@@ -378,7 +391,9 @@ class Router:
                 query_params=query_params,
                 loading_state=loading_state,
                 request_pathname=requests_pathname,
+                endpoints=endpoints
             )
+        
         return None
 
     def _process_slot_nodes(
@@ -389,6 +404,7 @@ class Router:
         query_params: Dict[str, Any],
         loading_state: Dict[str, bool],
         requests_pathname: str,
+        endpoints: Dict[UUID, Callable[..., Awaitable[any]]]
     ) -> Dict[str, ExecNode]:
         """Processes all slot nodes defined on the current node."""
         slot_exec_nodes: Dict[str, ExecNode] = {}
@@ -401,6 +417,7 @@ class Router:
                 query_params=query_params,
                 loading_state=loading_state,
                 request_pathname=requests_pathname,
+                endpoints=endpoints
             )
         return slot_exec_nodes
 
@@ -441,16 +458,18 @@ class Router:
                 {},
                 is_init,
             )
-
-        exec_tree = self.build_execution_tree(
+    
+        exec_tree, endpoints = self.build_execution_tree(
             current_node=active_node,
             segments=remaining_segments,
             parent_variables=path_vars,
             query_params=query_parameters,
             loading_state=updated_segments,
             request_pathname=path,
+            is_init=is_init,
+            endpoints={},
         )
-
+        
         if not exec_tree:
             return self._build_response(
                 RootContainer.ids.container,
@@ -459,8 +478,11 @@ class Router:
                 is_init,
             )
 
-        final_layout = await exec_tree.execute(is_init)
+        result_data = await self.gather_endpoints(endpoints)
+        final_layout = await exec_tree.execute(is_init, result_data)
+
         new_loading_state = {**updated_segments, **exec_tree.loading_state}
+        
         container_id = RootContainer.ids.container
         if active_node.parent_segment != "/":
             if active_node.is_slot:
@@ -477,6 +499,16 @@ class Router:
         return self._build_response(
             container_id, final_layout, new_loading_state, is_init
         )
+    
+    @staticmethod
+    async def gather_endpoints(endpoints: Dict[UUID, Callable[[any,any], Awaitable[any]]]):
+        if not endpoints:
+            return {}
+            
+        keys = list(endpoints.keys())
+        funcs = list(endpoints.values())
+        results = await asyncio.gather(*[func() for func in funcs], return_exceptions=True)
+        return dict(zip(keys, results))
 
     def _build_response(
         self,
@@ -564,16 +596,20 @@ class Router:
             path = self.strip_relative_path(pathname_)
 
             lacy_node = self.route_table.get(node_id)
-            exec_tree = self.build_execution_tree(
+            exec_tree, endpoints = self.build_execution_tree(
                 current_node=lacy_node,
                 segments=[],
                 parent_variables=node_variables,
                 query_params=query_parameters,
                 loading_state=loading_state_,
                 request_pathname=path,
+                is_init=False,
+                endpoints={}
             )
 
-            layout = await exec_tree.execute(is_init=False)
+            endpoint_results = await self.gather_endpoints(endpoints)
+            layout = await exec_tree.execute(is_init=False, endpoints=endpoint_results)
+
             container_id = RootContainer.ids.container
             if lacy_node.parent_segment != "/":
                 if lacy_node.is_slot:

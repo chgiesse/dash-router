@@ -1,7 +1,7 @@
 import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Awaitable
 from uuid import UUID
 
 from dash import html
@@ -42,20 +42,21 @@ class RouteConfig(BaseModel):
 
 class PageNode(BaseModel):
     node_id: UUID
-    layout: Callable | Component
+    layout: Callable[..., Awaitable[Component]] | Component
     module: str
     segment: str
     parent_segment: str
     path: str | None = None
     path_template: str | None = None
     is_slot: bool = False
-    is_static: bool = True
+    is_static: bool = False
     is_root: bool | None = None
     child_nodes: Dict[str, UUID] = Field(default_factory=dict)
     default_child: str | None = None
     slots: Dict[str, UUID] = Field(default_factory=dict)
-    loading: Callable | Component | None = None
-    error: Callable | Component | None = None
+    loading: Callable[..., Awaitable[Component]] | Component | None = None
+    error: Callable[..., Awaitable[Component]] | Component | None = None
+    endpoint: Callable[..., Awaitable[any]] | None = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -118,7 +119,7 @@ class RootNode(BaseModel):
 class ExecNode:
     """Represents a node in the execution tree"""
 
-    layout: Callable[..., Component] | Component
+    layout: Callable[..., Awaitable[Component]] | Component
     segment: str  # Added to keep track of the current segment
     node_id: UUID
     parent_segment: str
@@ -131,12 +132,24 @@ class ExecNode:
     loading: Callable | Component | None = None
     error: Callable | Component | None = None
 
-    async def execute(self, is_init: bool = True) -> Component:
+    async def execute(
+            self, 
+            endpoints: Dict[UUID, Dict[any]], 
+            is_init: bool = True
+        ) -> Component:
         """
         Executes the node by rendering its layout with the provided variables,
         slots, and views.
         """
         segment_key = self.segment
+        variables = {**self.variables}
+        data = endpoints.get(self.node_id)
+        
+        if data and isinstance(data, Exception):
+            return await self.handle_error(data, self.variables)
+        
+        if data:
+            variables["data"] = data
 
         if self.path_template:
             path_key = self.path_template.strip("<>")
@@ -153,19 +166,22 @@ class ExecNode:
                 if callable(self.loading):
                     loading_layout = await self.loading()
                 else:
-                    loading_layout = self.loading
+                    loading_layout = self.loading   
 
                 return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
         slots_content, views_content = await asyncio.gather(
-            self._handle_slots(), self._handle_child()
+            self._handle_slots(is_init, endpoints), 
+            self._handle_child(is_init, endpoints),
         )
 
         self.loading_state[segment_key] = True
         if callable(self.layout):
             try:
                 layout = await self.layout(
-                    **self.variables, **slots_content, **views_content
+                    **self.variables, 
+                    **slots_content, 
+                    **views_content,
                 )
             except Exception as e:
                 layout = await self.handle_error(e, self.variables)
@@ -184,12 +200,16 @@ class ExecNode:
             return self.error
         return html.Div(str(error), className="banner")
 
-    async def _handle_slots(self) -> Dict[str, Component]:
+    async def _handle_slots(
+            self, 
+            is_init: bool, 
+            endpoints: Dict[UUID, Dict[any]]
+        ) -> Dict[str, Component]:
         """
         Executes all slot nodes and gathers their rendered components.
         """
         if self.slots:
-            executables = [slot.execute() for slot in self.slots.values()]
+            executables = [slot.execute(endpoints, is_init) for slot in self.slots.values()]
             views = await asyncio.gather(*executables)
             results = {}
 
@@ -203,13 +223,17 @@ class ExecNode:
 
         return {}
 
-    async def _handle_child(self) -> Dict[str, Component]:
+    async def _handle_child(
+            self, 
+            is_init: bool, 
+            endpoints: Dict[UUID, Dict[any]]
+    ) -> Dict[str, Component]:
         """
         Executes the current view node.
         """
         if self.child_node:
             _, child_node = next(iter(self.child_node.items()))
-            layout = await child_node.execute() if child_node else None
+            layout = await child_node.execute(endpoints, is_init) if child_node else None
             return {
                 "children": ChildContainer(
                     layout, self.segment, child_node.segment if child_node else None
