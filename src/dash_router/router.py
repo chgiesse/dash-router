@@ -1,3 +1,4 @@
+from functools import partial
 import importlib
 import json
 import os
@@ -241,6 +242,7 @@ class Router:
 
         while remaining_segments:
             segment = remaining_segments[0]
+            print('Processing Segment', segment, sep=':', flush=True)
             if active_node is None:
                 active_node = self.dynamic_routes.get_route(segment)
                 if not active_node:
@@ -333,28 +335,34 @@ class Router:
 
         if current_node.loading and not is_init:
             endpoints[current_node.node_id] = current_node.endpoint
+        
+        if current_node.endpoint and not is_init:
+            partial_endpoint = partial(current_node.endpoint, **current_variables)
+            endpoints[current_node.node_id] = partial_endpoint
 
         if current_node.child_nodes:
             child_exec = self._process_child_node(
-                current_node,
-                segments.copy(),
-                current_variables,
-                query_params,
-                loading_state,
-                request_pathname,
-                endpoints
+                current_node=current_node,
+                segments=segments.copy(),
+                current_variables=current_variables,
+                query_params=query_params,
+                loading_state=loading_state,
+                requests_pathname=request_pathname,
+                endpoints=endpoints,
+                is_init=is_init,
             )
             exec_node.child_node["children"] = child_exec
 
         if current_node.slots:
             exec_node.slots = self._process_slot_nodes(
-                current_node,
-                segments.copy(),
-                current_variables,
-                query_params,
-                loading_state,
-                request_pathname,
-                endpoints
+                current_node=current_node,
+                segments=segments.copy(),
+                current_variables=current_variables,
+                query_params=query_params,
+                loading_state=loading_state,
+                requests_pathname=request_pathname,
+                endpoints=endpoints,
+                is_init=is_init,            
             )
             if not segments:
                 return exec_node, endpoints
@@ -369,7 +377,8 @@ class Router:
         query_params: Dict[str, Any],
         loading_state: Dict[str, bool],
         requests_pathname: str,
-        endpoints: Dict[UUID, Callable[..., Awaitable[any]]]
+        endpoints: Dict[UUID, Callable[..., Awaitable[any]]],
+        is_init: bool = True
     ) -> ExecNode | None:
         """Handles processing of a child view node."""
         next_segment = segments[0] if segments else None
@@ -384,15 +393,17 @@ class Router:
                 segments = segments[1:]
             
             child_node = self.route_table.get(child_node_id)
-            return self.build_execution_tree(
+            exec_node, _ = self.build_execution_tree(
                 current_node=child_node,
                 segments=segments.copy(),
                 parent_variables=current_variables,
                 query_params=query_params,
                 loading_state=loading_state,
                 request_pathname=requests_pathname,
-                endpoints=endpoints
+                endpoints=endpoints,
+                is_init=is_init
             )
+            return exec_node
         
         return None
 
@@ -404,21 +415,36 @@ class Router:
         query_params: Dict[str, Any],
         loading_state: Dict[str, bool],
         requests_pathname: str,
-        endpoints: Dict[UUID, Callable[..., Awaitable[any]]]
+        endpoints: Dict[UUID, Callable[..., Awaitable[any]]],
+        is_init: bool = True
     ) -> Dict[str, ExecNode]:
         """Processes all slot nodes defined on the current node."""
         slot_exec_nodes: Dict[str, ExecNode] = {}
         for slot_name, slot_id in current_node.slots.items():
-            slot_node = self.route_table.get(slot_id)
-            slot_exec_nodes[slot_name] = self.build_execution_tree(
+            slot_node: PageNode = self.route_table.get(slot_id)
+
+            if slot_node.is_slot and slot_node.path_template and not segments:
+                path_key = slot_node.path_template.strip("<>")
+                path_variable = current_variables.get(path_key) 
+                path_variable = path_variable or 'test'
+                segment_key = create_pathtemplate_key(
+                    slot_node.segment, slot_node.path_template, path_variable, path_key
+                )
+                loading_state[segment_key] = True
+
+            slot_exec_node, _ = self.build_execution_tree(
                 current_node=slot_node,
                 segments=segments.copy(),
                 parent_variables=current_variables,
                 query_params=query_params,
                 loading_state=loading_state,
                 request_pathname=requests_pathname,
-                endpoints=endpoints
+                endpoints=endpoints,
+                is_init=is_init
             )
+            
+            slot_exec_nodes[slot_name] = slot_exec_node
+            
         return slot_exec_nodes
 
     # ─── RESPONSE BUILDER ─────────────────────────────────────
@@ -479,7 +505,7 @@ class Router:
             )
 
         result_data = await self.gather_endpoints(endpoints)
-        final_layout = await exec_tree.execute(is_init, result_data)
+        final_layout = await exec_tree.execute(result_data, is_init)
 
         new_loading_state = {**updated_segments, **exec_tree.loading_state}
         
@@ -501,7 +527,7 @@ class Router:
         )
     
     @staticmethod
-    async def gather_endpoints(endpoints: Dict[UUID, Callable[[any,any], Awaitable[any]]]):
+    async def gather_endpoints(endpoints: Dict[UUID, Callable[..., Awaitable[any]]]):
         if not endpoints:
             return {}
             
@@ -550,7 +576,11 @@ class Router:
             pathname_, search_, loading_state_ = args
             query_parameters = _parse_query_string(search_)
 
-            return await self.dispatch(pathname_, query_parameters, loading_state_)
+            try:
+                return await self.dispatch(pathname_, query_parameters, loading_state_)
+            except Exception:
+                print(f"Traceback: {traceback.format_exc()}")
+                raise Exception("Failed to resolve the URL")
 
         @self.app.server.before_serving
         async def trigger_router():

@@ -131,34 +131,27 @@ class ExecNode:
     path_template: str | None = None
     loading: Callable | Component | None = None
     error: Callable | Component | None = None
+    is_slot: bool = False
 
     async def execute(
-            self, 
-            endpoints: Dict[UUID, Dict[any]], 
-            is_init: bool = True
-        ) -> Component:
+        self, endpoints: Dict[UUID, Dict[any, any]], is_init: bool = True
+    ) -> Component:
         """
         Executes the node by rendering its layout with the provided variables,
         slots, and views.
         """
         segment_key = self.segment
-        variables = {**self.variables}
-        data = endpoints.get(self.node_id)
-        
-        if data and isinstance(data, Exception):
-            return await self.handle_error(data, self.variables)
-        
-        if data:
-            variables["data"] = data
 
         if self.path_template:
             path_key = self.path_template.strip("<>")
-            path_variable = self.variables.get(path_key)
+            path_variable = self.variables.get(path_key) or 'test' if self.is_slot else None
             segment_key = create_pathtemplate_key(
                 self.segment, self.path_template, path_variable, path_key
             )
 
         segment_loading_state = self.loading_state.get(segment_key, False)
+        data = endpoints.get(self.node_id)
+        
         if self.loading is not None:
             if is_init and not segment_loading_state:
                 self.loading_state[segment_key] = True
@@ -166,29 +159,33 @@ class ExecNode:
                 if callable(self.loading):
                     loading_layout = await self.loading()
                 else:
-                    loading_layout = self.loading   
+                    loading_layout = self.loading
 
                 return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
+        if data and isinstance(data, Exception):
+            return await self.handle_error(data, self.variables)
+
         slots_content, views_content = await asyncio.gather(
-            self._handle_slots(is_init, endpoints), 
+            self._handle_slots(is_init, endpoints),
             self._handle_child(is_init, endpoints),
         )
-
+        
         self.loading_state[segment_key] = True
         if callable(self.layout):
             try:
                 layout = await self.layout(
-                    **self.variables, 
-                    **slots_content, 
+                    **self.variables,
+                    **slots_content,
                     **views_content,
+                    data=data
                 )
             except Exception as e:
                 layout = await self.handle_error(e, self.variables)
             return layout
 
         return self.layout
-
+    
     async def handle_error(self, error: Exception, variables: Dict[str, any]):
         if self.error:
             if callable(self.error):
@@ -224,9 +221,9 @@ class ExecNode:
         return {}
 
     async def _handle_child(
-            self, 
-            is_init: bool, 
-            endpoints: Dict[UUID, Dict[any]]
+        self, 
+        is_init: bool, 
+        endpoints: Dict[UUID, Dict[any]]
     ) -> Dict[str, Component]:
         """
         Executes the current view node.
