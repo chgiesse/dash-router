@@ -125,13 +125,13 @@ class ExecNode:
     parent_segment: str
     loading_state: Dict[str, bool]
     path: str
+    is_slot: bool = False,
     variables: Dict[str, str] = field(default_factory=dict)
     slots: Dict[str, "ExecNode"] = field(default_factory=dict)
     child_node: Dict[str, "ExecNode"] = field(default_factory=dict)
     path_template: str | None = None
     loading: Callable | Component | None = None
     error: Callable | Component | None = None
-    is_slot: bool = False
 
     async def execute(
         self, endpoints: Dict[UUID, Dict[any, any]], is_init: bool = True
@@ -163,7 +163,7 @@ class ExecNode:
 
                 return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
-        if data and isinstance(data, Exception):
+        if data is not None and isinstance(data, Exception):
             return await self.handle_error(data, self.variables)
 
         slots_content, views_content = await asyncio.gather(
@@ -202,9 +202,7 @@ class ExecNode:
             is_init: bool, 
             endpoints: Dict[UUID, Dict[any]]
         ) -> Dict[str, Component]:
-        """
-        Executes all slot nodes and gathers their rendered components.
-        """
+        """Executes all slot nodes and gathers their rendered components."""
         if self.slots:
             executables = [slot.execute(endpoints, is_init) for slot in self.slots.values()]
             views = await asyncio.gather(*executables)
@@ -225,9 +223,7 @@ class ExecNode:
         is_init: bool, 
         endpoints: Dict[UUID, Dict[any]]
     ) -> Dict[str, Component]:
-        """
-        Executes the current view node.
-        """
+        """Executes the current view node."""
         if self.child_node:
             _, child_node = next(iter(self.child_node.items()))
             layout = await child_node.execute(endpoints, is_init) if child_node else None
@@ -243,9 +239,8 @@ class ExecNode:
 @dataclass
 class SyncExecNode:
     """Represents a node in the execution tree"""
-
     layout: Callable[..., Component] | Component
-    segment: str  # Added to keep track of the current segment
+    segment: str
     node_id: UUID
     parent_segment: str
     loading_state: Dict[str, bool]

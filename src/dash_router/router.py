@@ -564,7 +564,7 @@ class Router:
                 return
 
             body = json.loads(request_data)
-            changed_prop = body["changedPropIds"]
+            changed_prop = changed_prop = body.get("changedPropIds")
             changed_prop_id = changed_prop[0].split(".")[0] if changed_prop else None
 
             if changed_prop_id != RootContainer.ids.location:
