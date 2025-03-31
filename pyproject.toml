@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flash-router"
-version = "0.2.0-beta.1"
+version = "0.2.1-beta.1"
 description = "File-system based router for Dash and Flash applications."
 authors = ["chgiesse"]
 repository = "https://github.com/chgiesse/dash-router"
