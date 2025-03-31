@@ -200,7 +200,7 @@ class ExecNode:
     async def _handle_slots(
             self, 
             is_init: bool, 
-            endpoints: Dict[UUID, Dict[any]]
+            endpoints: Dict[UUID, Dict[any, any]]
         ) -> Dict[str, Component]:
         """Executes all slot nodes and gathers their rendered components."""
         if self.slots:
@@ -221,7 +221,7 @@ class ExecNode:
     async def _handle_child(
         self, 
         is_init: bool, 
-        endpoints: Dict[UUID, Dict[any]]
+        endpoints: Dict[UUID, Dict[any, any]]
     ) -> Dict[str, Component]:
         """Executes the current view node."""
         if self.child_node:

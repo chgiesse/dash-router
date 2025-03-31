@@ -8,7 +8,9 @@ from uuid import UUID, uuid4
 
 from dash import html
 from dash._get_paths import app_strip_relative_path
-from dash._utils import inputs_to_vals
+from dash._grouping import map_grouping, update_args_group
+from dash._utils import inputs_to_vals, convert_to_AttributeDict
+from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
 from flash import Flash, Input, Output, State, set_props
 from flash._pages import _parse_path_variables, _parse_query_string
@@ -333,10 +335,11 @@ class Router:
             path=request_pathname,
         )
 
-        if current_node.loading and not is_init:
-            endpoints[current_node.node_id] = current_node.endpoint
+        if current_node.endpoint and not is_init and current_node.loading:
+            partial_endpoint = partial(current_node.endpoint, **current_variables)
+            endpoints[current_node.node_id] = partial_endpoint
         
-        if current_node.endpoint and not is_init:
+        if current_node.endpoint and not current_node.loading:
             partial_endpoint = partial(current_node.endpoint, **current_variables)
             endpoints[current_node.node_id] = partial_endpoint
 
@@ -570,14 +573,27 @@ class Router:
             if changed_prop_id != RootContainer.ids.location:
                 return
 
+            output = body["output"]
             inputs = body.get("inputs", [])
             state = body.get("state", [])
+            cb_data = self.app.callback_map[output]
+            inputs_state_indices = cb_data["inputs_state_indices"]
+
             args = inputs_to_vals(inputs + state)
-            pathname_, search_, loading_state_ = args
+            pathname_, search_, loading_state_, states_ = args
             query_parameters = _parse_query_string(search_)
+            pathname_, search_, loading_state_, states_ = args
+            query_parameters = _parse_query_string(search_)
+ 
+            _, func_kwargs = validate_and_group_input_args(
+                args, inputs_state_indices
+            )
+            # Skip the arguments required for routing
+            func_kwargs = dict(list(func_kwargs.items())[3:])
+            varibales = {**query_parameters, **func_kwargs}
 
             try:
-                return await self.dispatch(pathname_, query_parameters, loading_state_)
+                return await self.dispatch(pathname_, varibales, loading_state_)
             except Exception:
                 print(f"Traceback: {traceback.format_exc()}")
                 raise Exception("Failed to resolve the URL")
