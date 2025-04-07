@@ -8,7 +8,7 @@ from dash import html
 from dash.development.base_component import Component
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from ._utils import create_pathtemplate_key
+from ._utils import create_pathtemplate_key, create_segment_key
 from .components import ChildContainer, LacyContainer, SlotContainer
 
 LoadingStateType = Dict[str, Literal['lacy', 'done', 'hidden']]
@@ -135,23 +135,15 @@ class ExecNode:
     error: Callable | Component | None = None
 
     async def execute(
-        self, endpoints: Dict[UUID, Dict[any, any]], is_init: bool = True
+        self, endpoint_results: Dict[UUID, Dict[any, any]], is_init: bool = True
     ) -> Component:
         """
         Executes the node by rendering its layout with the provided variables,
         slots, and views.
         """
-        segment_key = self.segment
-
-        if self.path_template:
-            path_key = self.path_template.strip("<>")
-            path_variable = self.variables.get(path_key) or 'test' if self.is_slot else None
-            segment_key = create_pathtemplate_key(
-                self.segment, self.path_template, path_variable, path_key
-            )
-
+        segment_key = create_segment_key(self, self.variables)
         segment_loading_state = self.loading_state.get(segment_key, False)
-        data = endpoints.get(self.node_id)
+        data = endpoint_results.get(self.node_id)
         
         if self.loading and segment_loading_state != 'lacy':
             self.loading_state[segment_key] = 'lacy'
@@ -163,15 +155,14 @@ class ExecNode:
 
             return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
-        if data is not None and isinstance(data, Exception):
+        if isinstance(data, Exception):
             return await self.handle_error(data, self.variables)
 
         slots_content, views_content = await asyncio.gather(
-            self._handle_slots(is_init, endpoints),
-            self._handle_child(is_init, endpoints),
+            self._handle_slots(is_init, endpoint_results),
+            self._handle_child(is_init, endpoint_results),
         )
         
-        self.loading_state[segment_key] = 'done'
         if callable(self.layout):
             try:
                 layout = await self.layout(
@@ -182,6 +173,8 @@ class ExecNode:
                 )
             except Exception as e:
                 layout = await self.handle_error(e, self.variables)
+            
+            self.loading_state[segment_key] = 'done'
             return layout
 
         return self.layout
@@ -200,11 +193,11 @@ class ExecNode:
     async def _handle_slots(
             self, 
             is_init: bool, 
-            endpoints: Dict[UUID, Dict[any, any]]
+            endpoint_results: Dict[UUID, Dict[any, any]]
         ) -> Dict[str, Component]:
         """Executes all slot nodes and gathers their rendered components."""
         if self.slots:
-            executables = [slot.execute(endpoints, is_init) for slot in self.slots.values()]
+            executables = [slot.execute(endpoint_results, is_init) for slot in self.slots.values()]
             views = await asyncio.gather(*executables)
             results = {}
 
@@ -221,12 +214,12 @@ class ExecNode:
     async def _handle_child(
         self, 
         is_init: bool, 
-        endpoints: Dict[UUID, Dict[any, any]]
+        endpoint_results: Dict[UUID, Dict[any, any]]
     ) -> Dict[str, Component]:
         """Executes the current view node."""
         if self.child_node:
             _, child_node = next(iter(self.child_node.items()))
-            layout = await child_node.execute(endpoints, is_init) if child_node else None
+            layout = await child_node.execute(endpoint_results, is_init) if child_node else None
             return {
                 "children": ChildContainer(
                     layout, self.segment, child_node.segment if child_node else None

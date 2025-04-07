@@ -22,6 +22,7 @@ from ._utils import (
     format_segment,
     path_to_module,
     recursive_to_plotly_json,
+    create_segment_key
 )
 from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
 from .models import ExecNode, PageNode, RootNode, RouteConfig, RouterResponse, LoadingStateType
@@ -254,7 +255,7 @@ class Router:
                 remaining_segments.pop(0)
                 if not segment_loading_state or segment_loading_state == 'lacy':
                     return active_node, remaining_segments, updated_segments, variables
-                updated_segments[key] = True
+                updated_segments[key] = 'done'
                 continue
 
             child_node = active_node.get_child_node(segment, self.route_table)
@@ -286,7 +287,7 @@ class Router:
 
                 variables[child_node.path_template.strip("<>")] = segment
 
-            updated_segments[key] = True
+            updated_segments[key] = 'done'
             remaining_segments.pop(0)
 
         return active_node, remaining_segments, updated_segments, variables
@@ -442,7 +443,7 @@ class Router:
                 segment_key = create_pathtemplate_key(
                     slot_node.segment, slot_node.path_template, path_variable, path_key
                 )
-                loading_state[segment_key] = True
+                loading_state[segment_key] = 'done'
 
             slot_exec_node, _ = self.build_execution_tree(
                 current_node=slot_node,
@@ -495,7 +496,20 @@ class Router:
                 layout=html.H1("404 - Page not found"),
                 loading_state={},
             )
-    
+        
+        segment_key = create_segment_key(active_node, path_vars)
+        active_loading_state = loading_state.get(segment_key)
+        
+        if active_loading_state == 'done' and not remaining_segments:
+            print('Early return: ', active_node.segment, flush=True)
+            container_id = json.dumps(
+                ChildContainer.ids.container(active_node.segment)
+            )
+            
+            return self._build_response(
+                container_id, [], updated_segments, is_init
+            )
+
         exec_tree, endpoints = self.build_execution_tree(
             current_node=active_node,
             segments=remaining_segments,
@@ -610,13 +624,15 @@ class Router:
         async def trigger_router():
             inputs = {
                 "pathname_": Input(RootContainer.ids.location, "pathname"),
-                "search_": Input(RootContainer.ids.location, "search"),
+                "search_": State(RootContainer.ids.location, "search"),
                 "loading_state_": State(RootContainer.ids.state_store, "data"),
             }
             inputs.update(self.app.routing_callback_inputs)
 
             @self.app.callback(
-                Output(RootContainer.ids.dummy, "children"), inputs=inputs
+                Output(RootContainer.ids.dummy, "children"), 
+                inputs=inputs,
+                cancel=[Input(RootContainer.ids.location, 'pathname')]
             )
             async def update(
                 pathname_: str, search_: str, loading_state_: str, **states

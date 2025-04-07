@@ -219,3 +219,16 @@ def to_json_plotly(plotly_object, pretty=False, engine=None):
             modules=modules,
         )
         return cleaned
+    
+
+def create_segment_key(page_node, variables):
+    segment_key = page_node.segment
+
+    if page_node.path_template:
+        path_key = page_node.path_template.strip("<>")
+        path_variable = variables.get(path_key) or 'test' if page_node.is_slot else None
+        segment_key = create_pathtemplate_key(
+            page_node.segment, page_node.path_template, path_variable, path_key
+        )
+    
+    return segment_key
