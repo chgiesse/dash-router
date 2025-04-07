@@ -1,7 +1,7 @@
 import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Awaitable
+from typing import Callable, Dict, List, Awaitable, Literal
 from uuid import UUID
 
 from dash import html
@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from ._utils import create_pathtemplate_key
 from .components import ChildContainer, LacyContainer, SlotContainer
 
+LoadingStateType = Dict[str, Literal['lacy', 'done', 'hidden']]
 
 class RouteConfig(BaseModel):
     path_template: str | None = None
@@ -123,7 +124,7 @@ class ExecNode:
     segment: str  # Added to keep track of the current segment
     node_id: UUID
     parent_segment: str
-    loading_state: Dict[str, bool]
+    loading_state: LoadingStateType
     path: str
     is_slot: bool = False,
     variables: Dict[str, str] = field(default_factory=dict)
@@ -152,16 +153,15 @@ class ExecNode:
         segment_loading_state = self.loading_state.get(segment_key, False)
         data = endpoints.get(self.node_id)
         
-        if self.loading is not None:
-            if is_init and not segment_loading_state:
-                self.loading_state[segment_key] = True
+        if self.loading and segment_loading_state != 'lacy':
+            self.loading_state[segment_key] = 'lacy'
 
-                if callable(self.loading):
-                    loading_layout = await self.loading()
-                else:
-                    loading_layout = self.loading
+            if callable(self.loading):
+                loading_layout = await self.loading()
+            else:
+                loading_layout = self.loading
 
-                return LacyContainer(loading_layout, str(self.node_id), self.variables)
+            return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
         if data is not None and isinstance(data, Exception):
             return await self.handle_error(data, self.variables)
@@ -171,7 +171,7 @@ class ExecNode:
             self._handle_child(is_init, endpoints),
         )
         
-        self.loading_state[segment_key] = True
+        self.loading_state[segment_key] = 'done'
         if callable(self.layout):
             try:
                 layout = await self.layout(
@@ -279,7 +279,6 @@ class SyncExecNode:
 
         views_content = self._handle_child()
         slots_content = self._handle_slots()
-
         self.loading_state[segment_key] = True
         if callable(self.layout):
             try:

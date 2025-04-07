@@ -24,7 +24,7 @@ from ._utils import (
     recursive_to_plotly_json,
 )
 from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
-from .models import ExecNode, PageNode, RootNode, RouteConfig, RouterResponse
+from .models import ExecNode, PageNode, RootNode, RouteConfig, RouterResponse, LoadingStateType
 
 
 class Router:
@@ -217,7 +217,7 @@ class Router:
         return None, path_variables
 
     def _get_root_node(
-        self, segments: List[str], loading_state: Dict[str, bool]
+        self, segments: List[str], loading_state: LoadingStateType
     ) -> Tuple[PageNode | None, List[str], Dict[str, bool], Dict[str, str]]:
         """
         Iterates through URL segments to find the matching root node.
@@ -252,7 +252,7 @@ class Router:
                 key = compute_key(active_node, segment)
                 segment_loading_state = loading_state.get(key, False)
                 remaining_segments.pop(0)
-                if not segment_loading_state:  # or segment_loading_state == "lacy"
+                if not segment_loading_state or segment_loading_state == 'lacy':
                     return active_node, remaining_segments, updated_segments, variables
                 updated_segments[key] = True
                 continue
@@ -297,7 +297,7 @@ class Router:
         segments: List[str],
         parent_variables: Dict[str, str],
         query_params: Dict[str, Any],
-        loading_state: Dict[str, bool],
+        loading_state: LoadingStateType,
         request_pathname: str,
         endpoints: Dict[UUID, Callable[..., Awaitable[any]]],
         is_init: bool
@@ -321,7 +321,15 @@ class Router:
                 segments = []
 
             current_variables[varname] = next_segment
-
+        
+        segment_key = current_node.segment
+        if current_node.path_template:
+            path_key = current_node.path_template.strip("<>")
+            path_variable = current_variables.get(path_key) or 'test' if current_node.is_slot else None
+            segment_key = create_pathtemplate_key(
+                current_node.segment, current_node.path_template, path_variable, path_key
+            )
+        
         exec_node = ExecNode(
             node_id=current_node.node_id,
             layout=current_node.layout,
@@ -335,11 +343,12 @@ class Router:
             path=request_pathname,
         )
 
-        if current_node.endpoint and not is_init and current_node.loading:
-            partial_endpoint = partial(current_node.endpoint, **current_variables)
-            endpoints[current_node.node_id] = partial_endpoint
-        
-        if current_node.endpoint and not current_node.loading:
+        current_loading_state = loading_state.get(segment_key)
+
+        if (
+            (current_node.endpoint and current_loading_state == 'lacy') or
+            (current_node.endpoint and not current_node.loading)
+        ):
             partial_endpoint = partial(current_node.endpoint, **current_variables)
             endpoints[current_node.node_id] = partial_endpoint
 
@@ -378,7 +387,7 @@ class Router:
         segments: List[str],
         current_variables: Dict[str, str],
         query_params: Dict[str, Any],
-        loading_state: Dict[str, bool],
+        loading_state: LoadingStateType,
         requests_pathname: str,
         endpoints: Dict[UUID, Callable[..., Awaitable[any]]],
         is_init: bool = True
@@ -416,7 +425,7 @@ class Router:
         segments: List[str],
         current_variables: Dict[str, str],
         query_params: Dict[str, Any],
-        loading_state: Dict[str, bool],
+        loading_state: LoadingStateType,
         requests_pathname: str,
         endpoints: Dict[UUID, Callable[..., Awaitable[any]]],
         is_init: bool = True
@@ -455,7 +464,7 @@ class Router:
         self,
         pathname: str,
         query_parameters: Dict[str, any],
-        loading_state: Dict[str, any],
+        loading_state: LoadingStateType,
         is_init: bool = True,
     ) -> RouterResponse:
         if pathname == "/" or not pathname:
@@ -482,10 +491,9 @@ class Router:
 
         if not active_node:
             return self._build_response(
-                RootContainer.ids.container,
-                html.H1("404 - Page not found"),
-                {},
-                is_init,
+                container_id=RootContainer.ids.container,
+                layout=html.H1("404 - Page not found"),
+                loading_state={},
             )
     
         exec_tree, endpoints = self.build_execution_tree(
