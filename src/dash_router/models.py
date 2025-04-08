@@ -11,7 +11,30 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from ._utils import create_pathtemplate_key, create_segment_key
 from .components import ChildContainer, LacyContainer, SlotContainer
 
-LoadingStateType = Dict[str, Literal['lacy', 'done', 'hidden']]
+LoadingStateType =  Literal['lacy', 'done', 'hidden'] | None
+
+
+class LoadingState(BaseModel):
+    def __init__(self, node_id: str,  state: LoadingStateType = None):
+        self._state: LoadingStateType | None = state
+        self.node_id: str = node_id
+    
+    @property
+    def state(self):
+        return self._state
+    
+    @state.setter
+    def state(self, new_state: LoadingStateType):
+        self._state = new_state
+    
+@dataclass
+class LaodingStates: 
+    states: Dict[str, Dict[str, str]]
+
+    def get_state(self, segment_key: str):
+        state = self.states.get(segment_key)
+        return LoadingState(**state)
+
 
 class RouteConfig(BaseModel):
     path_template: str | None = None
@@ -58,6 +81,7 @@ class PageNode(BaseModel):
     loading: Callable[..., Awaitable[Component]] | Component | None = None
     error: Callable[..., Awaitable[Component]] | Component | None = None
     endpoint: Callable[..., Awaitable[any]] | None = None
+    endpoint_inputs: List[any] | None = None
 
     class Config:
         arbitrary_types_allowed = True

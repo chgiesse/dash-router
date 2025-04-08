@@ -2,7 +2,8 @@ import os
 from _plotly_utils.optional_imports import get_module
 from plotly.io._utils import validate_coerce_fig_to_dict
 from plotly.io._json import clean_to_json_compatible, config, JsonConfig
-
+from typing import get_type_hints, get_origin
+from pydantic import BaseModel
 
 def create_pathtemplate_key(
     segment: str, path_template: str, path_variable: str, template_key: str
@@ -232,3 +233,16 @@ def create_segment_key(page_node, variables):
         )
     
     return segment_key
+
+
+def extract_function_inputs(func):    
+    type_hints = get_type_hints(func)
+    inputs = []
+    for param_name, type_hint in type_hints.items():
+        origin = get_origin(type_hint)
+        inputs.append(param_name)
+        print(param_name, type_hint, flush=True)
+        if not origin and issubclass(type_hint, BaseModel):
+            fields = type_hint.model_fields
+            inputs += list(fields.keys())
+    return set(inputs)   
