@@ -8,7 +8,8 @@ from dash import html
 from dash.development.base_component import Component
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from ._utils import create_pathtemplate_key, create_segment_key
+from .utils.constants import DEFAULT_LAYOUT_TOKEN
+from .utils.helper_functions import create_pathtemplate_key, create_segment_key
 from .components import ChildContainer, LacyContainer, SlotContainer
 
 LoadingStateType =  Literal['lacy', 'done', 'hidden'] | None
@@ -168,8 +169,15 @@ class ExecNode:
         segment_key = create_segment_key(self, self.variables)
         segment_loading_state = self.loading_state.get(segment_key, False)
         data = endpoint_results.get(self.node_id)
+        print(
+            segment_key, 
+            segment_loading_state, 
+            self.loading, 
+            flush=True
+        )
         
-        if self.loading and segment_loading_state != 'lacy':
+        if self.loading and segment_loading_state != 'lacy' and f'<{DEFAULT_LAYOUT_TOKEN}>' not in segment_key:
+            print('LOAD LACY ', segment_key, flush=True)
             self.loading_state[segment_key] = 'lacy'
 
             if callable(self.loading):
@@ -186,7 +194,8 @@ class ExecNode:
             self._handle_slots(is_init, endpoint_results),
             self._handle_child(is_init, endpoint_results),
         )
-        
+        print('views_content', views_content, sep='|') if '<none>' in segment_key else None
+        print('self.variables', self.variables, sep='|') if '<none>' in segment_key else None
         if callable(self.layout):
             try:
                 layout = await self.layout(

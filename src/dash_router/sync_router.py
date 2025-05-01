@@ -12,7 +12,7 @@ from dash._utils import inputs_to_vals
 from dash.development.base_component import Component
 from flask import request
 
-from ._utils import (
+from .utils.helper_functions import (
     create_pathtemplate_key,
     format_segment,
     path_to_module,

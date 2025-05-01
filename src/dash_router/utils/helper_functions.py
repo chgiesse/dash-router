@@ -1,3 +1,5 @@
+from .constants import DEFAULT_LAYOUT_TOKEN
+
 import os
 from _plotly_utils.optional_imports import get_module
 from plotly.io._utils import validate_coerce_fig_to_dict
@@ -227,7 +229,7 @@ def create_segment_key(page_node, variables):
 
     if page_node.path_template:
         path_key = page_node.path_template.strip("<>")
-        path_variable = variables.get(path_key) or 'test' if page_node.is_slot else None
+        path_variable = variables.get(path_key) or DEFAULT_LAYOUT_TOKEN if page_node.is_slot else None
         segment_key = create_pathtemplate_key(
             page_node.segment, page_node.path_template, path_variable, path_key
         )

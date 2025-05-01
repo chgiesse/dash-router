@@ -17,7 +17,8 @@ from flash._pages import _parse_path_variables, _parse_query_string
 from quart import request
 import asyncio
 
-from ._utils import (
+from .utils.constants import REST_TOKEN
+from .utils.helper_functions import (
     create_pathtemplate_key,
     format_segment,
     path_to_module,
@@ -137,6 +138,8 @@ class Router:
     def load_route_module(
         self, current_dir: str, segment: str, parent_node: PageNode
     ) -> PageNode | None:
+        
+        # NOTE: should that be the way to determine the root node ? 
         is_root = parent_node is None or parent_node.segment == "/"
         segment = "/" if not parent_node else segment
         parent_segment = parent_node.segment if parent_node else "/"
@@ -144,9 +147,10 @@ class Router:
 
         page_layout = self.import_route_component(current_dir, "page.py")
         loading_layout = self.import_route_component(current_dir, "loading.py")
+        
         endpoint = self.import_route_component(current_dir, "api.py", "endpoint")
         endpoint_inputs = extract_function_inputs(endpoint) if endpoint else []
-        # layout_inputs = extract_function_inputs(page_layout)
+
         error_layout = (
             self.import_route_component(current_dir, "error.py") or self.app._on_error
         )
@@ -157,6 +161,8 @@ class Router:
 
         is_slot = segment.startswith("(") and segment.endswith(")")
         formatted_segment = format_segment(segment, is_slot)
+
+        # NOTE: I should make the also internaly a string to avoid convertion
         node_id = uuid4()
         new_node = PageNode(
             node_id=node_id,
@@ -237,28 +243,19 @@ class Router:
         variables: Dict[str, str] = {}
         active_node: PageNode | None = None
 
-        def compute_key(node: PageNode, segment: str) -> str:
-            if node.path_template:
-                return create_pathtemplate_key(
-                    node.segment,
-                    node.path_template,
-                    segment,
-                    node.path_template.strip("<>"),
-                )
-            return segment
-
         while remaining_segments:
             segment = remaining_segments[0]
             if active_node is None:
                 active_node = self.dynamic_routes.get_route(segment)
                 if not active_node:
                     return None, [], {}, {}
-                key = compute_key(active_node, segment)
-                segment_loading_state = loading_state.get(key, False)
+                segment_key = create_segment_key(active_node, variables)
+                segment_loading_state = loading_state.get(segment_key, False)
                 remaining_segments.pop(0)
                 if not segment_loading_state or segment_loading_state == 'lacy':
                     return active_node, remaining_segments, updated_segments, variables
-                updated_segments[key] = 'done'
+                
+                updated_segments[segment_key] = 'done'
                 continue
 
             child_node = active_node.get_child_node(segment, self.route_table)
@@ -269,28 +266,29 @@ class Router:
                     combined = f"{first}/{second}"
                     remaining_segments.insert(0, combined)
                     continue
+
                 remaining_segments.pop(0)
                 continue
 
-            key = compute_key(child_node, segment)
-            segment_loading_state = loading_state.get(key, False)
+            segment_key = create_segment_key(child_node, variables)
+            segment_loading_state = loading_state.get(segment_key, False)
             active_node = child_node
 
             if not segment_loading_state:
-                if child_node.segment == key:
+                if child_node.segment == segment_key:
                     remaining_segments.pop(0)
                 return active_node, remaining_segments, updated_segments, variables
 
             if child_node.path_template and remaining_segments:
                 if len(remaining_segments) == 1:
                     return active_node, remaining_segments, updated_segments, variables
-                if child_node.path_template == "<...rest>":
+                if child_node.path_template == REST_TOKEN:
                     variables["rest"] = remaining_segments
                     return active_node, [], updated_segments, variables
 
                 variables[child_node.path_template.strip("<>")] = segment
 
-            updated_segments[key] = 'done'
+            updated_segments[segment_key] = 'done'
             remaining_segments.pop(0)
 
         return active_node, remaining_segments, updated_segments, variables
@@ -315,7 +313,7 @@ class Router:
             next_segment = segments[0]
             varname = current_node.path_template.strip("<>")
             segments = segments[1:]
-            if current_node.path_template == "<...rest>":
+            if current_node.path_template == REST_TOKEN:
                 varname = "rest"
                 next_segment = (
                     [next_segment] + segments
@@ -326,13 +324,7 @@ class Router:
 
             current_variables[varname] = next_segment
         
-        segment_key = current_node.segment
-        if current_node.path_template:
-            path_key = current_node.path_template.strip("<>")
-            path_variable = current_variables.get(path_key) or 'test' if current_node.is_slot else None
-            segment_key = create_pathtemplate_key(
-                current_node.segment, current_node.path_template, path_variable, path_key
-            )
+        segment_key = create_segment_key(current_node, current_variables)
         
         exec_node = ExecNode(
             node_id=current_node.node_id,
@@ -349,10 +341,11 @@ class Router:
 
         current_loading_state = loading_state.get(segment_key)
 
-        if (
-            (current_node.endpoint and current_loading_state == 'lacy') or
-            (current_node.endpoint and not current_node.loading)
-        ):
+        if (current_loading_state != 'lacy' and current_node.loading): # current_node.endpoint and 
+            print('ADD ENDPOINT', current_node.segment, current_loading_state, flush=True)
+            return exec_node, endpoints
+        
+        if current_node.endpoint:
             partial_endpoint = partial(current_node.endpoint, **current_variables)
             endpoints[current_node.node_id] = partial_endpoint
 
@@ -440,12 +433,7 @@ class Router:
             slot_node: PageNode = self.route_table.get(slot_id)
 
             if slot_node.is_slot and slot_node.path_template and not segments:
-                path_key = slot_node.path_template.strip("<>")
-                path_variable = current_variables.get(path_key) 
-                path_variable = path_variable or 'test'
-                segment_key = create_pathtemplate_key(
-                    slot_node.segment, slot_node.path_template, path_variable, path_key
-                )
+                segment_key = create_segment_key(slot_node, current_variables)
                 loading_state[segment_key] = 'done'
 
             slot_exec_node, _ = self.build_execution_tree(
@@ -503,14 +491,14 @@ class Router:
         segment_key = create_segment_key(active_node, path_vars)
         active_loading_state = loading_state.get(segment_key)
         
-        if active_loading_state == 'done' and not remaining_segments:
-            container_id = json.dumps(
-                ChildContainer.ids.container(active_node.segment)
-            )
+        # if active_loading_state == 'done' and not remaining_segments:
+        #     container_id = json.dumps(
+        #         ChildContainer.ids.container(active_node.segment)
+        #     )
             
-            return self._build_response(
-                container_id, [], updated_segments, is_init
-            )
+        #     return self._build_response(
+        #         container_id, [], updated_segments, is_init
+        #     )
 
         exec_tree, endpoints = self.build_execution_tree(
             current_node=active_node,
@@ -578,7 +566,21 @@ class Router:
         print('query_params', query_params, flush=True)
         print('endpoint_inputs', active_node.endpoint_inputs, flush=True)
 
-        current_node = None
+        if set(active_node.endpoint_inputs.keys()).intersection(set(updated_query_parameters.keys())):
+            # exec_node = ExecNode(
+            #     node_id=current_node.node_id,
+            #     layout=current_node.layout,
+            #     segment=current_node.segment,
+            #     parent_segment=current_node.parent_segment,
+            #     variables=current_variables,
+            #     loading_state=loading_state,
+            #     path_template=current_node.path_template,
+            #     loading=current_node.loading,
+            #     error=current_node.error,
+            #     path=request_pathname,
+            # )
+            print('Load function', active_node.segment, flush=True)
+        
         for segment in remaining_segments:
             current_node = active_node if not current_node else current_node
             next_node = active_node.get_child_node(segment, self.route_table)
@@ -657,7 +659,7 @@ class Router:
 
             if changed_prop_id != RootContainer.ids.location:
                 return
-
+            print('--------', flush=True)
             output = body["output"]
             inputs = body.get("inputs", [])
             state = body.get("state", [])
@@ -755,4 +757,7 @@ class Router:
 
             endpoint_results = await self.gather_endpoints(endpoints)
             layout = await exec_tree.execute(is_init=False, endpoint_results=endpoint_results)
+            new_loading_state = {key: val if val != 'lacy' else 'done' for key, val in loading_state.items()}
+            if layout:
+                set_props(RootContainer.ids.state_store, {'data': new_loading_state})
             return layout
