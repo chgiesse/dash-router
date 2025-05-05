@@ -130,6 +130,7 @@ def path_to_module(current_dir: str, module: str):
     module_name = ".".join(module_path_parts)
     return module_name
 
+
 def to_json_plotly(plotly_object, pretty=False, engine=None):
     """
     Convert a plotly/Dash object to a JSON string representation
@@ -228,7 +229,7 @@ def create_segment_key(page_node, variables):
     segment_key = page_node.segment
 
     if page_node.path_template:
-        path_key = page_node.path_template.strip("<>")
+        path_key = page_node.path_template.strip("[]")
         path_variable = variables.get(path_key) or DEFAULT_LAYOUT_TOKEN if page_node.is_slot else None
         segment_key = create_pathtemplate_key(
             page_node.segment, page_node.path_template, path_variable, path_key

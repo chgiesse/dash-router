@@ -8,18 +8,16 @@ from uuid import UUID, uuid4
 
 from dash import html
 from dash._get_paths import app_strip_relative_path
-from dash._grouping import map_grouping, update_args_group
 from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
-from flash import Flash, Input, Output, State, MATCH, set_props, no_update
+from flash import Flash, Input, Output, State, MATCH, set_props
 from flash._pages import _parse_path_variables, _parse_query_string
 from quart import request
 import asyncio
 
 from .utils.constants import REST_TOKEN
 from .utils.helper_functions import (
-    create_pathtemplate_key,
     format_segment,
     path_to_module,
     recursive_to_plotly_json,
@@ -160,6 +158,8 @@ class Router:
         )
 
         is_slot = segment.startswith("(") and segment.endswith(")")
+        is_pathtemplate = segment.startswith('[') and segment.endswith(']')
+        path_template = segment if is_pathtemplate else None
         formatted_segment = format_segment(segment, is_slot)
 
         # NOTE: I should make the also internaly a string to avoid convertion
@@ -176,7 +176,8 @@ class Router:
             error=error_layout,
             loading=loading_layout,
             endpoint=endpoint,
-            endpoint_inputs=endpoint_inputs
+            endpoint_inputs=endpoint_inputs,
+            path_template=path_template
         )   
 
         self.route_table[node_id] = new_node
@@ -311,7 +312,7 @@ class Router:
         current_variables = {**parent_variables, **query_params}
         if segments and current_node.path_template:
             next_segment = segments[0]
-            varname = current_node.path_template.strip("<>")
+            varname = varname = current_node.path_template.strip("[]").replace('_', '-')
             segments = segments[1:]
             if current_node.path_template == REST_TOKEN:
                 varname = "rest"

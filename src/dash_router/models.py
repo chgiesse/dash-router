@@ -113,7 +113,7 @@ class PageNode(BaseModel):
     def load_config(self, config: RouteConfig):
         config = config or RouteConfig()
 
-        self.path_template = config.path_template
+        # self.path_template = config.path_template
         # self.title = config.title
         # self.description = config.description
         # self.order = config.order
@@ -172,12 +172,10 @@ class ExecNode:
         print(
             segment_key, 
             segment_loading_state, 
-            self.loading, 
             flush=True
         )
         
-        if self.loading and segment_loading_state != 'lacy' and f'<{DEFAULT_LAYOUT_TOKEN}>' not in segment_key:
-            print('LOAD LACY ', segment_key, flush=True)
+        if self.loading and segment_loading_state != 'lacy' and f'[{DEFAULT_LAYOUT_TOKEN}]' not in segment_key:
             self.loading_state[segment_key] = 'lacy'
 
             if callable(self.loading):
@@ -194,8 +192,7 @@ class ExecNode:
             self._handle_slots(is_init, endpoint_results),
             self._handle_child(is_init, endpoint_results),
         )
-        print('views_content', views_content, sep='|') if '<none>' in segment_key else None
-        print('self.variables', self.variables, sep='|') if '<none>' in segment_key else None
+
         if callable(self.layout):
             try:
                 layout = await self.layout(
