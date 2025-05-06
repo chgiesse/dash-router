@@ -6,6 +6,9 @@ from plotly.io._utils import validate_coerce_fig_to_dict
 from plotly.io._json import clean_to_json_compatible, config, JsonConfig
 from typing import get_type_hints, get_origin
 from pydantic import BaseModel
+from fnmatch import fnmatch
+import re
+
 
 def create_pathtemplate_key(
     segment: str, path_template: str, path_variable: str, template_key: str
@@ -114,6 +117,13 @@ def recursive_to_plotly_json(component):
     
     return component
 
+def format_relative_path(path: str):
+    return (
+        path
+        .replace('.', '/')
+        .replace('_', '-')
+        .replace(' ', '-')
+    )
 
 def format_segment(segment: str, is_slot: bool = False):
     if is_slot:
@@ -249,3 +259,30 @@ def extract_function_inputs(func):
             fields = type_hint.model_fields
             inputs += list(fields.keys())
     return set(inputs)   
+
+
+def _parse_path_variables(pathname, path_template):
+    """
+    creates the dict of path variables passed to the layout
+    e.g. path_template= "/asset/<asset_id>"
+         if pathname provided by the browser is "/assets/a100"
+         returns **{"asset_id": "a100"}
+    """
+
+    # parse variable definitions e.g. <var_name> from template
+    # and create pattern to match
+    wildcard_pattern = re.sub("[.*?]", "*", path_template)
+    var_pattern = re.sub("[.*?]", "(.*)", path_template)
+
+    # check that static sections of the pathname match the template
+    if not fnmatch(pathname, wildcard_pattern):
+        return None
+
+    # parse variable names e.g. var_name from template
+    var_names = re.findall("[(.*?)]", path_template)
+
+    # parse variables from path
+    variables = re.findall(var_pattern, pathname)
+    variables = variables[0] if isinstance(variables[0], tuple) else variables
+
+    return dict(zip(var_names, variables))

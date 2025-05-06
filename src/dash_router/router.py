@@ -12,21 +12,25 @@ from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
 from flash import Flash, Input, Output, State, MATCH, set_props
-from flash._pages import _parse_path_variables, _parse_query_string
+from flash._pages import _parse_query_string
 from quart import request
 import asyncio
 
 from .utils.constants import REST_TOKEN
 from .utils.helper_functions import (
-    format_segment,
+    format_relative_path,
     path_to_module,
     recursive_to_plotly_json,
     create_segment_key,
-    extract_function_inputs
+    extract_function_inputs,
+    format_relative_path
 )
 from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
-from .models import ExecNode, PageNode, RootNode, RouteConfig, RouterResponse, LoadingStateType
-
+from .models import RootNode, RouterResponse, LoadingStateType
+from .core.route_tree import route_tree
+from .core.route_table import route_table
+from .core.route_node import PageNode, RouteConfig
+from .core.execution_node import ExecNode
 
 class Router:
     def __init__(
@@ -48,8 +52,8 @@ class Router:
             raise TypeError(f"App needs to be of Flash not: {type(self.app)}")
 
         self.setup_route_tree()
-        self.setup_router()
-        self.setup_lacy_callback()
+        # self.setup_router()
+        # self.setup_lacy_callback()
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
@@ -75,6 +79,7 @@ class Router:
     ) -> None:
         """Recursively traverses the directory structure and registers routes."""
         current_dir = os.path.join(parent_dir, segment)
+        print('current dir', current_dir, flush=True)
         if not os.path.exists(current_dir):
             return
 
@@ -84,7 +89,8 @@ class Router:
         if dir_has_page:
             new_node = self.load_route_module(current_dir, segment, current_node)
             if new_node is not None:
-                self._process_directory_with_page(current_dir, new_node, current_node)
+                route_table.add_node(new_node)
+                route_tree.add_node(new_node, current_node)
                 next_node = new_node
             else:
                 next_node = current_node
@@ -96,93 +102,51 @@ class Router:
                 continue
 
             full_path = os.path.join(current_dir, entry)
+            print('NEXT DIR: ', full_path)
             if os.path.isdir(full_path):
                 self._traverse_directory(current_dir, entry, next_node)
 
-    def _process_directory_with_page(
-        self,
-        current_dir: str,
-        new_node: PageNode,
-        parent_node: Union[RootNode, PageNode] | None,
-    ) -> None:
-        """
-        Registers a node from a directory containing a page.py.
-        Registration is based on whether the node is a root, static, slot, or dynamic route.
-        """
-        if current_dir == self.pages_folder:
-            new_node.path = "/"
-            new_node.segment = "/"
-            new_node.parent_segment = None
-            self.static_routes.register_root_route(new_node)
-        else:
-            relative_path = os.path.relpath(current_dir, self.pages_folder)
-            if new_node.path_template:
-                relative_path = f"{relative_path}/{new_node.path_template}"
-            relative_path = format_segment(relative_path)
-            new_node.path = relative_path
-
-            if new_node.is_static:
-                self.static_routes.register_root_route(new_node)
-
-            elif new_node.is_root:
-                self.dynamic_routes.register_root_route(new_node)
-
-            elif new_node.is_slot:
-                parent_node.register_slot(new_node)
-
-            else:
-                parent_node.register_route(new_node)
-
     def load_route_module(
-        self, current_dir: str, segment: str, parent_node: PageNode
+        self, 
+        current_dir: str, 
+        segment: str, 
+        parent_node: PageNode
     ) -> PageNode | None:
-        
-        # NOTE: should that be the way to determine the root node ? 
-        is_root = parent_node is None or parent_node.segment == "/"
-        segment = "/" if not parent_node else segment
-        parent_segment = parent_node.segment if parent_node else "/"
+        '''Load modules and create Page Node'''
+        relative_path = os.path.relpath(current_dir, self.pages_folder)
+        relative_path = format_relative_path(relative_path)
         page_module_name = path_to_module(current_dir, "page.py")
+        parent_node_id = parent_node.node_id if parent_node else None
+        
+        route_config = self.import_route_component(current_dir, "page.py", "config") or RouteConfig()
+        is_static = route_config.is_static or relative_path == '/'
+        is_root = parent_node and parent_node.segment == '/'
+        segment = relative_path if is_static else segment
 
         page_layout = self.import_route_component(current_dir, "page.py")
         loading_layout = self.import_route_component(current_dir, "loading.py")
+        error_layout = (self.import_route_component(current_dir, "error.py") or self.app._on_error)
         
         endpoint = self.import_route_component(current_dir, "api.py", "endpoint")
         endpoint_inputs = extract_function_inputs(endpoint) if endpoint else []
 
-        error_layout = (
-            self.import_route_component(current_dir, "error.py") or self.app._on_error
-        )
-        route_config = (
-            self.import_route_component(current_dir, "page.py", "config")
-            or RouteConfig()
-        )
-
-        is_slot = segment.startswith("(") and segment.endswith(")")
-        is_pathtemplate = segment.startswith('[') and segment.endswith(']')
-        path_template = segment if is_pathtemplate else None
-        formatted_segment = format_segment(segment, is_slot)
-
-        # NOTE: I should make the also internaly a string to avoid convertion
-        node_id = uuid4()
+        node_id = str(uuid4())
         new_node = PageNode(
+            _segment=segment,
             node_id=node_id,
             layout=page_layout,
-            segment=formatted_segment,
-            parent_segment=parent_segment,
+            parent_id=parent_node_id,
             module=page_module_name,
-            is_slot=is_slot,
-            is_static=route_config.is_static,
             is_root=is_root,
             error=error_layout,
             loading=loading_layout,
             endpoint=endpoint,
             endpoint_inputs=endpoint_inputs,
-            path_template=path_template
-        )   
+            path=relative_path,
+            is_static=is_static,
+            default_child=route_config.default_child
+        )
 
-        self.route_table[node_id] = new_node
-
-        new_node.load_config(route_config)
         return new_node
 
     def strip_relative_path(self, path: str) -> str:
@@ -217,18 +181,25 @@ class Router:
 
         return None
 
-    def get_static_route(self, path: str) -> Tuple[PageNode | None, Any]:
-        path_variables: Any = None
-        for root_page in self.static_routes.routes.values():
-            if root_page.path_template:
-                path_variables = _parse_path_variables(path, root_page.path)
-                if path_variables:
-                    return root_page, path_variables
-            if path == root_page.path:
-                return root_page, path_variables
-        return None, path_variables
-
     def _get_root_node(
+        self, 
+        segments: List[str], 
+        loading_state: LoadingStateType
+    ) -> Tuple[PageNode | None, List[str], Dict[str, bool], Dict[str, str]]:
+        
+        remaining_segments = list(reversed(segments))
+        updated_segments: Dict[str, bool] = {}
+        variables: Dict[str, str] = {}
+        active_node: PageNode | None = None
+
+        while remaining_segments:
+            segment = remaining_segments.pop()
+            if active_node is None:
+                active_node = self.dynamic_routes.get_route(segment)
+
+        return active_node, remaining_segments, updated_segments, variables 
+
+    def _get_root_node_legacy(
         self, segments: List[str], loading_state: LoadingStateType
     ) -> Tuple[PageNode | None, List[str], Dict[str, bool], Dict[str, str]]:
         """
@@ -313,6 +284,7 @@ class Router:
         if segments and current_node.path_template:
             next_segment = segments[0]
             varname = varname = current_node.path_template.strip("[]").replace('_', '-')
+
             segments = segments[1:]
             if current_node.path_template == REST_TOKEN:
                 varname = "rest"
@@ -460,15 +432,9 @@ class Router:
         loading_state: LoadingStateType,
         is_init: bool = True,
     ) -> RouterResponse:
-        if pathname == "/" or not pathname:
-            node = self.static_routes.get_route("/")
-            layout = await node.layout(**query_parameters)
-            return self._build_response(
-                RootContainer.ids.container, layout, {}, is_init
-            )
 
         path = self.strip_relative_path(pathname)
-        static_route, path_variables = self.get_static_route(path)
+        static_route, path_variables = route_tree.get_static_route(path)
         if static_route:
             layout = await static_route.layout(
                 **query_parameters, **(path_variables or {})

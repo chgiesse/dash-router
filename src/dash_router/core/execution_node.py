@@ -1,191 +1,16 @@
 import asyncio
-from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Awaitable, Literal
 from uuid import UUID
 
 from dash import html
 from dash.development.base_component import Component
-from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from .utils.constants import DEFAULT_LAYOUT_TOKEN
-from .utils.helper_functions import create_pathtemplate_key, create_segment_key
-from .components import ChildContainer, LacyContainer, SlotContainer
+from ..utils.constants import DEFAULT_LAYOUT_TOKEN
+from ..utils.helper_functions import create_pathtemplate_key, create_segment_key
+from ..components import ChildContainer, LacyContainer, SlotContainer
 
 LoadingStateType =  Literal['lacy', 'done', 'hidden'] | None
-
-
-class LoadingState(BaseModel):
-    def __init__(self, node_id: str,  state: LoadingStateType = None):
-        self._state: LoadingStateType | None = state
-        self.node_id: str = node_id
-    
-    @property
-    def state(self):
-        return self._state
-    
-    @state.setter
-    def state(self, new_state: LoadingStateType):
-        self._state = new_state
-    
-@dataclass
-class LaodingStates: 
-    states: Dict[str, Dict[str, str]]
-
-    def get_state(self, segment_key: str):
-        state = self.states.get(segment_key)
-        return LoadingState(**state)
-
-
-class RouteConfig(BaseModel):
-    path_template: str | None = None
-    default_child: str | None = None
-    is_static: bool = False
-    title: str | None = None
-    description: str | None = None
-    name: str | None = None
-    order: int | None = None
-    image: str | None = None
-    image_url: str | None = None
-    redirect_from: List[str] | None = None
-
-    @field_validator("path_template")
-    def validate_path_template(cls, value: any) -> str | None:
-        if not value:
-            return None
-
-        if not isinstance(value, str):
-            raise ValidationError(
-                f"{type(value)} is not a valid type. Has to be either string or none."
-            )
-
-        if value.startswith("<") and value.endswith(">"):
-            return value
-
-        raise ValidationError("A path template has to start with < and end with >")
-
-
-class PageNode(BaseModel):
-    _segment: str
-    node_id: str
-    layout: Callable[..., Awaitable[Component]] | Component
-    module: str
-    parent_id: str
-    path: str | None = None
-    path_template: str | None = None
-    is_static: bool = False
-    is_root: bool | None = None
-    child_nodes: Dict[str, str] = Field(default_factory=dict)
-    default_child: str | None = None
-    slots: Dict[str, str] = Field(default_factory=dict)
-    loading: Callable[..., Awaitable[Component]] | Component | None = None
-    error: Callable[..., Awaitable[Component]] | Component | None = None
-    endpoint: Callable[..., Awaitable[any]] | None = None
-    endpoint_inputs: List[any] | None = None
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    @property
-    def is_slot(self):
-        if self._segment.startswith('(') and self._segment.endswith(')'):
-            return True
-        return False
-    
-    @property
-    def is_path_template(self):
-        if self._segment.startswith('[') and self._segment.endswith(']'):
-            return True
-        return False
-
-    @property
-    def path_template(self):
-        if self.is_path_template:
-            return self.segment
-
-    @property
-    def segment(self):
-        if self.is_path_template:
-            return self._segment
-        
-        if self.is_slot:
-            return self._segment.strip('()')
-        
-        formatted_segment = (
-            self._segment
-            .replace("_", "-")
-            .replace(" ", "-")
-        )
-        return formatted_segment
-    
-
-    def register_slot(self, node: "PageNode"):
-        if node.segment in self.slots:
-            raise KeyError(f"{node.segment} is already registered as slot!")
-
-        self.slots[node.segment] = node.node_id
-
-    def register_route(self, node: "PageNode"):
-        if node.segment in self.slots:
-            raise KeyError(f"{node.segment} is already registered as parallel route!!")
-
-        self.child_nodes[node.segment] = node.node_id
-
-    def get_child_node(self, segment: str, route_table: Dict[str, "PageNode"]):
-        # Try to match a parallel child first
-        if child_id := self.child_nodes.get(segment):
-            return route_table.get(child_id)
-        
-        # Otherwise, check the slots for a node with a path template
-        for slot_id in self.slots.values():
-            slot_node = route_table.get(slot_id)
-            if slot_node and slot_node.path_template:
-                return slot_node
-        
-        return None
-
-    def load_config(self, config: RouteConfig):
-        config = config or RouteConfig()
-
-        # self.path_template = config.path_template
-        # self.title = config.title
-        # self.description = config.description
-        # self.order = config.order
-        # self.image = config.image
-        # self.image_url = config.image_url
-        # self.redirect_from = config.redirect_from
-        # self.has_slots = config.has_slots
-        self.default_child = config.default_child
-        self.is_static = config.is_static
-
-
-class RouteTable(BaseModel):
-    table: Dict[str, PageNode]
-
-    def add_node(self, node: PageNode):
-        if node.node_id in self.table:
-            raise KeyError(f"{node.segment} is already registered!")
-        self.table[node.node_id] = node
-
-    def get_node(self, node_id: str):
-        return self.table.get(node_id)
-
-
-class RootNode(BaseModel):
-    routes: Dict[str, PageNode] = Field(default_factory=OrderedDict)
-    segment: str = "/"
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    def register_root_route(self, node: PageNode):
-        if node.path in self.routes:
-            raise ValueError(f"{node.path} is already registered")
-
-        self.routes[node.path] = node
-
-    def get_route(self, path: str) -> PageNode:
-        return self.routes.get(path, None)
 
 
 @dataclass
@@ -194,7 +19,7 @@ class ExecNode:
 
     layout: Callable[..., Awaitable[Component]] | Component
     segment: str  # Added to keep track of the current segment
-    node_id: UUID
+    node_id: str
     parent_segment: str
     loading_state: LoadingStateType
     path: str
@@ -402,12 +227,3 @@ class SyncExecNode:
             }
 
         return {}
-
-
-class RouterResponse(BaseModel):
-    response: Dict[str, any]
-    mimetype: str = "application/json"
-    multi: bool = False
-
-    class Config:
-        arbitrary_types_allowed = True
