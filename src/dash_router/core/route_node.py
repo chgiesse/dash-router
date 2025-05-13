@@ -1,3 +1,5 @@
+from ..utils.constants import DEFAULT_LAYOUT_TOKEN
+
 from typing import Callable, Dict, List, Awaitable, Optional
 from dash.development.base_component import Component
 from pydantic import BaseModel, Field, field_validator, ValidationError
@@ -70,7 +72,7 @@ class PageNode(BaseModel):
     def segment(self) -> str:
         """Get the formatted segment name."""
         if self.is_path_template:
-            return self.segment_value
+            return self.segment_value.strip('[]')
 
         if self.is_slot:
             return self.segment_value.strip('()')
@@ -103,29 +105,35 @@ class PageNode(BaseModel):
         
         self.path_template = node.node_id
 
+    def create_segment_key(self, value):
+        if not self.is_path_template:
+            return self.segment
+        
+        path_var = value or DEFAULT_LAYOUT_TOKEN
+        path_key = self.segment_value
+        filled_template = path_key.replace(self.segment, path_var)
+        path_template_key = path_key + filled_template
+        return path_template_key
 
     def get_child_node(self, segment: str) -> Optional["PageNode"]:
         """Get a child node by segment."""
-        from .route_table import route_table  # Import here to avoid circular dependency
+        from .route_table import RouteTable  # Import here to avoid circular dependency
+        
+        if self.default_child and not segment:
+            default_node_id = self.child_nodes.get(self.default_child)
+            return RouteTable.get_node(default_node_id)
         
         # Try to match a parallel child first
         if child_id := self.child_nodes.get(segment):
-            return route_table.get(child_id)
+            return RouteTable.get_node(child_id)
 
         # Otherwise, check the slots for a node with a path template
-        if self.is_path_template:
-            return route_table.get(self.path_template)
+        if self.path_template:
+            return RouteTable.get_node(self.path_template)
         
-    def load_config(self, config: RouteConfig):
-        config = config or RouteConfig()
+    
+    def get_slots(self):
+        from .route_table import RouteTable
 
-        # self.path_template = config.path_template
-        # self.title = config.title
-        # self.description = config.description
-        # self.order = config.order
-        # self.image = config.image
-        # self.image_url = config.image_url
-        # self.redirect_from = config.redirect_from
-        # self.has_slots = config.has_slots
-        self.default_child = config.default_child
-        # self.is_static = config.is_static
+        return {key: RouteTable.get_node(val) for key, val in self.slots.items()}
+        

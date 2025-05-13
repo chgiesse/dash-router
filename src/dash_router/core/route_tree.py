@@ -1,39 +1,90 @@
-from hmac import new
+from dash_router.models import LoadingStateType
 from ..utils.helper_functions import _parse_path_variables
-from .route_table import route_table
+from .route_table import RouteTable
 from .route_node import PageNode
 
-from typing import Dict, Tuple
+from dash._utils import AttributeDict
+from typing import Dict, Tuple, List, ClassVar
 
 
 class RouteTree:
 
-    def __init__(self) -> None:
-        self._static_routes: Dict[str, str] = {}
-        self._dynamic_routes: Dict[str, str] = {}
+    _static_routes: ClassVar[Dict[str, str]] = {}
+    _dynamic_routes: ClassVar[AttributeDict] = AttributeDict(
+        routes={}, 
+        path_template=None
+    )
 
-    
-    def add_static_route(self, new_node: PageNode) -> None:
-        if new_node.path in self._static_routes:
+    def __new__(cls):
+        raise TypeError("RouteTree is a static class and should not be instantiated") 
+
+    @classmethod
+    def add_static_route(cls, new_node: PageNode) -> None:
+        if new_node.path in cls._static_routes:
             raise KeyError(f'{new_node.segment} with path {new_node.path} is already present in static routes')
         
-        self._static_routes[new_node.path] = new_node
+        cls._static_routes[new_node.path] = new_node
 
- 
-    def add_root_route(self, new_node: PageNode):
-        if new_node.segment in self._dynamic_routes:
+    @classmethod
+    def add_root_route(cls, new_node: PageNode) -> None:
+        if new_node.is_path_template:
+            if cls._dynamic_routes.path_template:
+                raise ValueError(f"{new_node.segment} already has a path template!")
+
+            cls._dynamic_routes.path_template = new_node.node_id
+
+        if new_node.segment in cls._dynamic_routes.routes:
             raise KeyError(f'{new_node.segment} with path {new_node.path} is already present in static routes')
+        
+        cls._dynamic_routes.routes[new_node.segment] = new_node.node_id
 
-        self._dynamic_routes[new_node.segment] = new_node
+    @classmethod
+    def get_root_node(cls, segments: List[str]) -> Tuple[PageNode, List, Dict]:
+        missed_segments: str = None
+        node: PageNode = None
+        path_variables: Dict = {}
+
+        for segment in segments:
+            if missed_segments:
+                segment = missed_segments + '/' + segment
+
+            if node_id := cls._dynamic_routes.routes.get(segment):
+                node = RouteTable.get_node(node_id)
+                segments = segments[1:]
+                return node, segments, path_variables
+
+            if node_id := cls._dynamic_routes.path_template:
+                node = RouteTable.get_node(node_id)
+                path_variables[node.segment] = segment
+                segments = segments[1:]
+                return node, segments, path_variables
+            
+            missed_segments = segment
+            segments = segments[1:]
+        
+        remaining_segments = segments
+        return node, remaining_segments, path_variables
+    
+    @classmethod
+    def get_active_root_node(cls, segments: List[str], loading_state: LoadingStateType):
+        root_node, remaining_segments, variables = cls.get_root_node(segments)
+        remaining_segments = list(reversed(remaining_segments))
+        updated_segments: Dict[str, bool] = {}
+
+        if root_node is None:
+            return root_node, remaining_segments, updated_segments, variables
+
+        return root_node, remaining_segments, updated_segments, variables
 
 
-    def add_node(self, new_node: PageNode, parent_node: PageNode | None) -> None:
+    @classmethod
+    def add_node(cls, new_node: PageNode, parent_node: PageNode | None) -> None:
         if new_node.is_static:
-            self.add_static_route(new_node)
+            cls.add_static_route(new_node)
             return
         
         if new_node.is_root:
-            self.add_root_route(new_node)
+            cls.add_root_route(new_node)
             return
         
         if new_node.is_slot:
@@ -46,26 +97,22 @@ class RouteTree:
         
         parent_node.register_route(new_node)
 
-
-    def get_static_route(self, path: str | None) -> Tuple[PageNode, Dict[str, any]]:
+    @classmethod
+    def get_static_route(cls, path: str | None) -> Tuple[PageNode, Dict[str, any]]:
         path_variables = None
         if not path:
-            index_node = self._static_routes.get('/')
+            index_node = cls._static_routes.get('/')
             return index_node, path_variables
 
-        for page_path, page_id in self._static_routes.items():
+        for page_path, page_id in cls._static_routes.items():
             if '[' in page_path and ']' in page_path:
                 path_variables = _parse_path_variables(path, page_path)
                 if path_variables:
-                    page_node = route_table.get_node(page_id)
+                    page_node = RouteTable.get_node(page_id)
                     return page_node, path_variables
             
             if path == page_path:
-                page_node = route_table.get_node(page_id)
+                page_node = RouteTable.get_node(page_id)
                 return page_node, path_variables
         
         return None, path_variables
-        
-
-route_tree = RouteTree()
-    

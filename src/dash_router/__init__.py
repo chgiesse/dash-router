@@ -1,4 +1,4 @@
-from .models import PageNode, RouteConfig
 from .components import RootContainer, ChildContainer, SlotContainer
 from .router import Router
-from .sync_router import SyncRouter
+from .core.route_node import RouteConfig
+# from .sync_router import SyncRouter

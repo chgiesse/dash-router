@@ -1,19 +1,21 @@
 from .route_node import PageNode
 
-from typing import Dict
-from uuid import UUID
+from typing import Dict, ClassVar
 
 class RouteTable:
 
-    def __init__(self) -> None:
-        self.table: Dict[UUID, PageNode] = {}
+    _table: ClassVar[Dict[str, PageNode]] = {}
+    
+    def __new__(cls):
+        raise TypeError("RouteTable is a static class and should not be instantiated") 
 
-    def add_node(self, node: PageNode) -> None:
-        if node.node_id in self.table:
+    @classmethod
+    def add_node(cls, node: PageNode) -> None:
+        if node.node_id in cls._table:
             raise KeyError(f"{node.segment} is already registered!")
-        self.table[node.node_id] = node
+        
+        cls._table[node.node_id] = node
 
-    def get_node(self, node_id: UUID) -> PageNode:
-        return self.table.get(node_id)
-
-route_table = RouteTable()
+    @classmethod
+    def get_node(cls, node_id: str) -> PageNode:
+        return cls._table.get(node_id)

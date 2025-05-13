@@ -17,19 +17,16 @@ LoadingStateType =  Literal['lacy', 'done', 'hidden'] | None
 class ExecNode:
     """Represents a node in the execution tree"""
 
-    layout: Callable[..., Awaitable[Component]] | Component
     segment: str  # Added to keep track of the current segment
     node_id: str
-    parent_segment: str
-    loading_state: LoadingStateType
-    path: str
-    is_slot: bool = False,
+    parent_id: str
+    layout: Callable[..., Awaitable[Component]] | Component
     variables: Dict[str, str] = field(default_factory=dict)
     slots: Dict[str, "ExecNode"] = field(default_factory=dict)
     child_node: Dict[str, "ExecNode"] = field(default_factory=dict)
-    path_template: str | None = None
     loading: Callable | Component | None = None
     error: Callable | Component | None = None
+    is_lacy: bool = False
 
     async def execute(
         self, endpoint_results: Dict[UUID, Dict[any, any]], is_init: bool = True
@@ -38,18 +35,9 @@ class ExecNode:
         Executes the node by rendering its layout with the provided variables,
         slots, and views.
         """
-        segment_key = create_segment_key(self, self.variables)
-        segment_loading_state = self.loading_state.get(segment_key, False)
         data = endpoint_results.get(self.node_id)
-        print(
-            segment_key, 
-            segment_loading_state, 
-            flush=True
-        )
         
-        if self.loading and segment_loading_state != 'lacy' and f'[{DEFAULT_LAYOUT_TOKEN}]' not in segment_key:
-            self.loading_state[segment_key] = 'lacy'
-
+        if self.is_lacy:
             if callable(self.loading):
                 loading_layout = await self.loading()
             else:
@@ -76,7 +64,6 @@ class ExecNode:
             except Exception as e:
                 layout = await self.handle_error(e, self.variables)
             
-            self.loading_state[segment_key] = 'done'
             return layout
 
         return self.layout
@@ -206,7 +193,7 @@ class SyncExecNode:
             for slot_name, slot_layout in zip(self.slots.keys(), views):
                 clean_slot_name = slot_name.strip("()")
                 results[clean_slot_name] = SlotContainer(
-                    slot_layout, self.segment, slot_name
+                    slot_layout, self.node_id, slot_name
                 )
 
             return results
@@ -222,7 +209,7 @@ class SyncExecNode:
             layout = child_node.execute() if child_node else None
             return {
                 "children": ChildContainer(
-                    layout, self.segment, child_node.segment if child_node else None
+                    layout, self.node_id, child_node.segment if child_node else None
                 )
             }
 
