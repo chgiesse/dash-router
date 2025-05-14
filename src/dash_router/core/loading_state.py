@@ -12,8 +12,10 @@ class LoadingState(BaseModel):
 
 class LoadingStates:
     def __init__(self, init_loading_state: Dict[str, Dict]):
-        self._states = {nid: LoadingState(**ils) for nid, ils in init_loading_state.items()} 
-    
+        self._states = {
+            nid: LoadingState(**ils) for nid, ils in init_loading_state.items()
+        }
+
     def get_state(self, node: PageNode, value):
         ls = self._states.get(node.node_id)
         if ls:
@@ -26,7 +28,6 @@ class LoadingStates:
     def update(self, node: PageNode, state, value):
         ls = LoadingState(value=value, state=state)
         self._states[node.node_id] = ls
-    
+
     def update_state(self, node: PageNode, state: LoadingStateType):
         self._states[node.node_id].state = state
-    

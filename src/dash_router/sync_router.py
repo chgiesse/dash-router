@@ -495,7 +495,7 @@
 #             return self.dispatch(pathname_, query_parameters, loading_state_)
 
 #         with self.app.server.app_context():
-            
+
 #             inputs = {
 #                 "pathname_": Input(RootContainer.ids.location, "pathname"),
 #                 "search_": Input(RootContainer.ids.location, "search"),
@@ -562,7 +562,7 @@
 #             return self._build_response(
 #                 container_id, layout, exec_tree.loading_state, True
 #             )
-        
+
 #         with self.app.server.app_context():
 
 #             @self.app.callback(

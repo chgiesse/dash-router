@@ -10,7 +10,7 @@ from dash import html
 from dash.development.base_component import Component
 
 
-LoadingStateType =  Literal['lacy', 'done', 'hidden'] | None
+LoadingStateType = Literal["lacy", "done", "hidden"] | None
 
 
 @dataclass
@@ -36,7 +36,7 @@ class ExecNode:
         slots, and views.
         """
         data = endpoint_results.get(self.node_id)
-        
+
         if self.is_lacy:
             if callable(self.loading):
                 loading_layout = await self.loading()
@@ -56,18 +56,15 @@ class ExecNode:
         if callable(self.layout):
             try:
                 layout = await self.layout(
-                    **self.variables,
-                    **slots_content,
-                    **views_content,
-                    data=data
+                    **self.variables, **slots_content, **views_content, data=data
                 )
             except Exception as e:
                 layout = await self.handle_error(e, self.variables)
-            
+
             return layout
 
         return self.layout
-    
+
     async def handle_error(self, error: Exception, variables: Dict[str, any]):
         if self.error:
             if callable(self.error):
@@ -80,13 +77,13 @@ class ExecNode:
         return html.Div(str(error), className="banner")
 
     async def _handle_slots(
-            self, 
-            is_init: bool, 
-            endpoint_results: Dict[UUID, Dict[any, any]]
-        ) -> Dict[str, Component]:
+        self, is_init: bool, endpoint_results: Dict[UUID, Dict[any, any]]
+    ) -> Dict[str, Component]:
         """Executes all slot nodes and gathers their rendered components."""
         if self.slots:
-            executables = [slot.execute(endpoint_results, is_init) for slot in self.slots.values()]
+            executables = [
+                slot.execute(endpoint_results, is_init) for slot in self.slots.values()
+            ]
             views = await asyncio.gather(*executables)
             results = {}
 
@@ -101,14 +98,16 @@ class ExecNode:
         return {}
 
     async def _handle_child(
-        self, 
-        is_init: bool, 
-        endpoint_results: Dict[UUID, Dict[any, any]]
+        self, is_init: bool, endpoint_results: Dict[UUID, Dict[any, any]]
     ) -> Dict[str, Component]:
         """Executes the current view node."""
         if self.child_node:
             _, child_node = next(iter(self.child_node.items()))
-            layout = await child_node.execute(endpoint_results, is_init) if child_node else None
+            layout = (
+                await child_node.execute(endpoint_results, is_init)
+                if child_node
+                else None
+            )
             return {
                 "children": ChildContainer(
                     layout, self.node_id, child_node.segment if child_node else None
@@ -121,6 +120,7 @@ class ExecNode:
 @dataclass
 class SyncExecNode:
     """Represents a node in the execution tree"""
+
     layout: Callable[..., Component] | Component
     segment: str
     node_id: UUID
@@ -219,30 +219,28 @@ class SyncExecNode:
 class ExecTree:
 
     def __init__(
-            self, 
-            variables, 
-            query_params, 
-            loading_state, 
-            request_pathname, 
-            endpoints, 
-            is_init
-        ) -> None:
+        self,
+        variables,
+        query_params,
+        loading_state,
+        request_pathname,
+        endpoints,
+        is_init,
+    ) -> None:
         self.variables = variables
         self.query_params = query_params
-        self.loading_state = loading_state 
+        self.loading_state = loading_state
         self.request_pathname = request_pathname
         self.endpoints = endpoints
         self.is_init = is_init
-
 
     def build(self, current_node, segments: List[str]):
         """Recursively builds the execution tree for the matched route."""
         if not current_node:
             return current_node
 
-
     async def execute(self):
-        pass    
+        pass
 
     def get_loading_state(self):
         pass
@@ -252,5 +250,3 @@ class ExecTree:
 
     def update_ls_state(self):
         pass
-
-    

@@ -12,7 +12,7 @@ from .utils.constants import DEFAULT_LAYOUT_TOKEN
 from .utils.helper_functions import create_pathtemplate_key, create_segment_key
 from .components import ChildContainer, LacyContainer, SlotContainer
 
-LoadingStateType =  Literal['lacy', 'done', 'hidden'] | None
+LoadingStateType = Literal["lacy", "done", "hidden"] | None
 
 
 @dataclass
@@ -25,7 +25,7 @@ class ExecNode:
     parent_segment: str
     loading_state: LoadingStateType
     path: str
-    is_slot: bool = False,
+    is_slot: bool = (False,)
     variables: Dict[str, str] = field(default_factory=dict)
     slots: Dict[str, "ExecNode"] = field(default_factory=dict)
     child_node: Dict[str, "ExecNode"] = field(default_factory=dict)
@@ -43,14 +43,14 @@ class ExecNode:
         segment_key = create_segment_key(self, self.variables)
         segment_loading_state = self.loading_state.get(segment_key, False)
         data = endpoint_results.get(self.node_id)
-        print(
-            segment_key, 
-            segment_loading_state, 
-            flush=True
-        )
-        
-        if self.loading and segment_loading_state != 'lacy' and f'[{DEFAULT_LAYOUT_TOKEN}]' not in segment_key:
-            self.loading_state[segment_key] = 'lacy'
+        print(segment_key, segment_loading_state, flush=True)
+
+        if (
+            self.loading
+            and segment_loading_state != "lacy"
+            and f"[{DEFAULT_LAYOUT_TOKEN}]" not in segment_key
+        ):
+            self.loading_state[segment_key] = "lacy"
 
             if callable(self.loading):
                 loading_layout = await self.loading()
@@ -70,19 +70,16 @@ class ExecNode:
         if callable(self.layout):
             try:
                 layout = await self.layout(
-                    **self.variables,
-                    **slots_content,
-                    **views_content,
-                    data=data
+                    **self.variables, **slots_content, **views_content, data=data
                 )
             except Exception as e:
                 layout = await self.handle_error(e, self.variables)
-            
-            self.loading_state[segment_key] = 'done'
+
+            self.loading_state[segment_key] = "done"
             return layout
 
         return self.layout
-    
+
     async def handle_error(self, error: Exception, variables: Dict[str, any]):
         if self.error:
             if callable(self.error):
@@ -95,13 +92,13 @@ class ExecNode:
         return html.Div(str(error), className="banner")
 
     async def _handle_slots(
-            self, 
-            is_init: bool, 
-            endpoint_results: Dict[UUID, Dict[any, any]]
-        ) -> Dict[str, Component]:
+        self, is_init: bool, endpoint_results: Dict[UUID, Dict[any, any]]
+    ) -> Dict[str, Component]:
         """Executes all slot nodes and gathers their rendered components."""
         if self.slots:
-            executables = [slot.execute(endpoint_results, is_init) for slot in self.slots.values()]
+            executables = [
+                slot.execute(endpoint_results, is_init) for slot in self.slots.values()
+            ]
             views = await asyncio.gather(*executables)
             results = {}
 
@@ -116,14 +113,16 @@ class ExecNode:
         return {}
 
     async def _handle_child(
-        self, 
-        is_init: bool, 
-        endpoint_results: Dict[UUID, Dict[any, any]]
+        self, is_init: bool, endpoint_results: Dict[UUID, Dict[any, any]]
     ) -> Dict[str, Component]:
         """Executes the current view node."""
         if self.child_node:
             _, child_node = next(iter(self.child_node.items()))
-            layout = await child_node.execute(endpoint_results, is_init) if child_node else None
+            layout = (
+                await child_node.execute(endpoint_results, is_init)
+                if child_node
+                else None
+            )
             return {
                 "children": ChildContainer(
                     layout, self.segment, child_node.segment if child_node else None
@@ -136,6 +135,7 @@ class ExecNode:
 @dataclass
 class SyncExecNode:
     """Represents a node in the execution tree"""
+
     layout: Callable[..., Component] | Component
     segment: str
     node_id: UUID
