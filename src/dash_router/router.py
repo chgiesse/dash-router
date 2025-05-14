@@ -16,7 +16,7 @@ from flash._pages import _parse_query_string
 from quart import request
 import asyncio
 
-from .utils.constants import REST_TOKEN
+from .utils.constants import REST_TOKEN, DEFAULT_LAYOUT_TOKEN
 from .utils.helper_functions import (
     format_relative_path,
     path_to_module,
@@ -53,7 +53,7 @@ class Router:
 
         self.setup_route_tree()
         self.setup_router()
-        # self.setup_lacy_callback()
+        self.setup_lacy_callback()
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
@@ -79,7 +79,6 @@ class Router:
     ) -> None:
         """Recursively traverses the directory structure and registers routes."""
         current_dir = os.path.join(parent_dir, segment)
-        print("current dir", current_dir, flush=True)
         if not os.path.exists(current_dir):
             return
 
@@ -201,16 +200,20 @@ class Router:
         """
 
         if not current_node:
-            print("Return due to no node", flush=True)
             return current_node, endpoints
 
         current_variables = {**parent_variables, **query_params}
         next_segment = segments[-1] if segments else None
         segment_key = current_node.create_segment_key(next_segment)
+        is_default = DEFAULT_LAYOUT_TOKEN in segment_key
         current_loading_state = loading_state.get(segment_key)
-        is_lacy = current_loading_state != "lacy" and current_node.loading
+        is_lacy = (
+            current_loading_state != "lacy"
+            and current_node.loading is not None
+            and not is_default
+            and is_init
+        )
 
-        print("Processing segment: ", segment_key, loading_state, flush=True)
         exec_node = ExecNode(
             segment=segment_key,
             node_id=current_node.node_id,
@@ -224,7 +227,6 @@ class Router:
 
         if current_node.is_path_template:
             varname = current_node.segment
-            print("Add path template: ", varname, flush=True)
             if current_node.segment == REST_TOKEN:
                 varname = "rest"
                 next_segment = segments
@@ -239,7 +241,7 @@ class Router:
             loading_state[segment_key] = "lacy"
             return exec_node, endpoints
 
-        if current_node.endpoint:
+        if current_node.endpoint and not is_default:
             partial_endpoint = partial(current_node.endpoint, **current_variables)
             endpoints[current_node.node_id] = partial_endpoint
 
@@ -250,7 +252,7 @@ class Router:
                 if not child_node or not child_node.is_path_template
                 else segments
             )
-            print("Add child: ", next_segment, flush=True)
+
             child_exec, _ = self.build_execution_tree(
                 current_node=child_node,
                 segments=segments.copy(),
@@ -293,7 +295,6 @@ class Router:
         """Processes all slot nodes defined on the current node."""
         slot_exec_nodes: Dict[str, ExecNode] = {}
         for slot_name, slot_id in current_node.slots.items():
-            print("Adding slot: ", slot_name, flush=True)
             slot_node = RouteTable.get_node(slot_id)
 
             segment_key = create_segment_key(slot_node, current_variables)
@@ -342,19 +343,6 @@ class Router:
         if not active_node:
             return self.build_response(node=None, loading_state={})
 
-        print("Active node: ", active_node.segment, remaining_segments, flush=True)
-        # segment_key = create_segment_key(active_node, path_vars)
-        # active_loading_state = loading_state.get(segment_key)
-
-        # if not remaining_segments or (active_node.is_path_template and len(remaining_segments) == 1):
-        #     container_id = json.dumps(
-        #         ChildContainer.ids.container(active_node.segment)
-        #     )
-
-        #     return self._build_response(
-        #         container_id, [], updated_segments, is_init
-        #     )
-
         exec_tree, endpoints = self.build_execution_tree(
             current_node=active_node,
             segments=remaining_segments,
@@ -374,13 +362,10 @@ class Router:
 
         new_loading_state = {**updated_segments, "query_params": query_parameters}
 
-        print("new_loading_state", new_loading_state, flush=True)
-
         response = self.build_response(
             node=active_node, loading_state=new_loading_state, layout=final_layout
         )
 
-        print(response, flush=True)
         return response
 
     async def resolve_search(
@@ -585,9 +570,9 @@ class Router:
             lacy_node = RouteTable.get_node(node_id)
             path = self.strip_relative_path(pathname)
             segments = path.split("/")
-            node_segments = node_segments = lacy_node.module.split(".")[1:-1]
-            current_index = node_segments.index(lacy_node.segment)
-            remaining_segments = segments[current_index:]
+            node_segments = lacy_node.module.split(".")[1:-1]
+            current_index = node_segments.index(lacy_node.segment_value)
+            remaining_segments = list(reversed(segments[current_index:]))
 
             exec_tree, endpoints = self.build_execution_tree(
                 current_node=lacy_node,
