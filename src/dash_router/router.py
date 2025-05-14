@@ -2,7 +2,6 @@ from functools import partial
 import importlib
 import json
 import os
-from pickletools import read_uint1
 import traceback
 from typing import Any, Awaitable, Callable, Dict, List, Literal, Tuple, Union
 from uuid import UUID, uuid4
@@ -29,10 +28,8 @@ from .utils.helper_functions import (
 )
 from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
 from .models import RouterResponse, LoadingStateType
-from .core.route_tree import RouteTree
-from .core.route_table import RouteTable
-from .core.route_node import PageNode, RouteConfig
-from .core.execution_node import ExecNode
+from .core.routing import PageNode, RouteConfig, RouteTable, RouteTree
+from .core.execution import ExecNode
 
 class Router:
     def __init__(
@@ -338,18 +335,17 @@ class Router:
         active_node, remaining_segments, updated_segments, path_vars = (
             RouteTree.get_active_root_node(init_segments, loading_state, self.ignore_empty_folders)
         )
-        print('Active node: ', active_node.segment, remaining_segments, flush=True)
         if not active_node:
             return self._build_response(
                 container_id=RootContainer.ids.container,
                 layout=html.H1("404 - Page not found"),
                 loading_state={},
             )
+        print('Active node: ', active_node.segment, remaining_segments, flush=True)        
+        # segment_key = create_segment_key(active_node, path_vars)
+        # active_loading_state = loading_state.get(segment_key)
         
-        segment_key = create_segment_key(active_node, path_vars)
-        active_loading_state = loading_state.get(segment_key)
-        
-        # if active_loading_state == 'done' and not remaining_segments:
+        # if not remaining_segments or (active_node.is_path_template and len(remaining_segments) == 1):
         #     container_id = json.dumps(
         #         ChildContainer.ids.container(active_node.segment)
         #     )
@@ -380,11 +376,7 @@ class Router:
         result_data = await self.gather_endpoints(endpoints)
         final_layout = await exec_tree.execute(result_data, is_init)
 
-        new_loading_state = {
-            **updated_segments, 
-            **loading_state,
-            'query_params': query_parameters
-        }
+        new_loading_state = {**updated_segments, 'query_params': query_parameters}
 
         print('new_loading_state', new_loading_state, flush=True)
         
@@ -514,6 +506,7 @@ class Router:
 
             if changed_prop_id != RootContainer.ids.location:
                 return
+            
             print('--------', flush=True)
             output = body["output"]
             inputs = body.get("inputs", [])

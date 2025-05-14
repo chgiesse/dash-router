@@ -1,14 +1,14 @@
-import asyncio
+from ..utils.helper_functions import create_pathtemplate_key
+from ..components import ChildContainer, LacyContainer, SlotContainer
+
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Awaitable, Literal
+from typing import Callable, Dict, Awaitable, Literal, List
 from uuid import UUID
+import asyncio
 
 from dash import html
 from dash.development.base_component import Component
 
-from ..utils.constants import DEFAULT_LAYOUT_TOKEN
-from ..utils.helper_functions import create_pathtemplate_key, create_segment_key
-from ..components import ChildContainer, LacyContainer, SlotContainer
 
 LoadingStateType =  Literal['lacy', 'done', 'hidden'] | None
 
@@ -214,3 +214,43 @@ class SyncExecNode:
             }
 
         return {}
+
+
+class ExecTree:
+
+    def __init__(
+            self, 
+            variables, 
+            query_params, 
+            loading_state, 
+            request_pathname, 
+            endpoints, 
+            is_init
+        ) -> None:
+        self.variables = variables
+        self.query_params = query_params
+        self.loading_state = loading_state 
+        self.request_pathname = request_pathname
+        self.endpoints = endpoints
+        self.is_init = is_init
+
+
+    def build(self, current_node, segments: List[str]):
+        """Recursively builds the execution tree for the matched route."""
+        if not current_node:
+            return current_node
+
+
+    async def execute(self):
+        pass    
+
+    def get_loading_state(self):
+        pass
+
+    def update_ls_value(self):
+        pass
+
+    def update_ls_state(self):
+        pass
+
+    
