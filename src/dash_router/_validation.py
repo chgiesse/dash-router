@@ -1,7 +1,7 @@
 from typing import Dict
 from uuid import UUID
 
-from .core.route_node import PageNode
+from .core.routing import PageNode
 
 
 class RouteTreeValidationError(Exception):

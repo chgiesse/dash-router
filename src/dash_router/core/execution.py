@@ -18,7 +18,7 @@ LoadingStateType = Literal["lacy", "done", "hidden"] | None
 class ExecNode:
     """Represents a node in the execution tree"""
 
-    segment: str  # Added to keep track of the current segment
+    segment: str
     node_id: str
     parent_id: str
     layout: Callable[..., Awaitable[Component]] | Component
@@ -60,51 +60,49 @@ class ExecNode:
         return layout
 
     async def handle_error(self, error: Exception, variables: Dict[str, any]):
-        if self.error:
-            error_layout = await _invoke_layout(self.error, error, **variables)
-            return error_layout
+        if not self.error:
+            return html.Div(str(error), className="banner")
 
-        return html.Div(str(error), className="banner")
+        error_layout = await _invoke_layout(self.error, error, **variables)
+        return error_layout
 
     async def _handle_slots(
         self, is_init: bool, endpoint_results: Dict[UUID, Dict[any, any]]
     ) -> Dict[str, Component]:
         """Executes all slot nodes and gathers their rendered components."""
-        if self.slots:
-            executables = [
-                slot.execute(endpoint_results, is_init) for slot in self.slots.values()
-            ]
-            views = await asyncio.gather(*executables)
-            results = {}
+        if not self.slots:
+            return {}
 
-            for slot_name, slot_layout in zip(self.slots.keys(), views):
-                clean_slot_name = slot_name.strip("()")
-                results[clean_slot_name] = SlotContainer(
-                    slot_layout, self.segment, slot_name
-                )
+        executables = [
+            slot.execute(endpoint_results, is_init) for slot in self.slots.values()
+        ]
+        views = await asyncio.gather(*executables)
+        results = {}
 
-            return results
+        for slot_name, slot_layout in zip(self.slots.keys(), views):
+            clean_slot_name = slot_name.strip("()")
+            results[clean_slot_name] = SlotContainer(
+                slot_layout, self.segment, slot_name
+            )
 
-        return {}
+        return results
 
     async def _handle_child(
         self, is_init: bool, endpoint_results: Dict[UUID, Dict[any, any]]
     ) -> Dict[str, Component]:
         """Executes the current view node."""
-        if self.child_node:
-            _, child_node = next(iter(self.child_node.items()))
-            layout = (
-                await child_node.execute(endpoint_results, is_init)
-                if child_node
-                else None
-            )
-            return {
-                "children": ChildContainer(
-                    layout, self.node_id, child_node.segment if child_node else None
-                )
-            }
+        if not self.child_node:
+            return {}
 
-        return {}
+        _, child_node = next(iter(self.child_node.items()))
+        layout = (
+            await child_node.execute(endpoint_results, is_init) if child_node else None
+        )
+        return {
+            "children": ChildContainer(
+                layout, self.node_id, child_node.segment if child_node else None
+            )
+        }
 
 
 @dataclass
