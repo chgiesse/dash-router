@@ -2,6 +2,7 @@ from functools import partial
 import importlib
 import json
 import os
+from pickletools import read_uint1
 import traceback
 from typing import Any, Awaitable, Callable, Dict, List, Literal, Tuple, Union
 from uuid import UUID, uuid4
@@ -183,90 +184,6 @@ class Router:
 
         return None
 
-    def _get_root_node(
-        self, 
-        segments: List[str], 
-        loading_state: LoadingStateType
-    ) -> Tuple[PageNode | None, List[str], Dict[str, bool], Dict[str, str]]:
-        
-        remaining_segments = list(reversed(segments))
-        updated_segments: Dict[str, bool] = {}
-        variables: Dict[str, str] = {}
-        active_node: PageNode | None = None
-
-        while remaining_segments:
-            segment = remaining_segments.pop()
-            if active_node is None:
-                active_node = self.dynamic_routes.get_route(segment)
-
-        return active_node, remaining_segments, updated_segments, variables 
-
-    def _get_root_node_legacy(
-        self, segments: List[str], loading_state: LoadingStateType
-    ) -> Tuple[PageNode | None, List[str], Dict[str, bool], Dict[str, str]]:
-        """
-        Iterates through URL segments to find the matching root node.
-        Returns:
-          - The active PageNode (or None if not found),
-          - The remaining segments,
-          - An updated loading state mapping, and
-          - Any extracted path variables.
-        """
-        remaining_segments = segments.copy()
-        updated_segments: Dict[str, bool] = {}
-        variables: Dict[str, str] = {}
-        active_node: PageNode | None = None
-
-        while remaining_segments:
-            segment = remaining_segments[0]
-            if active_node is None:
-                active_node = self.dynamic_routes.get_route(segment)
-                if not active_node:
-                    return None, [], {}, {}
-                segment_key = create_segment_key(active_node, variables)
-                segment_loading_state = loading_state.get(segment_key, False)
-                remaining_segments.pop(0)
-                if not segment_loading_state or segment_loading_state == 'lacy':
-                    return active_node, remaining_segments, updated_segments, variables
-                
-                updated_segments[segment_key] = 'done'
-                continue
-
-            child_node = active_node.get_child_node(segment, self.route_table)
-            if not child_node:
-                if not self.ignore_empty_folders and len(remaining_segments) > 1:
-                    first = remaining_segments.pop(0)
-                    second = remaining_segments.pop(0)
-                    combined = f"{first}/{second}"
-                    remaining_segments.insert(0, combined)
-                    continue
-
-                remaining_segments.pop(0)
-                continue
-
-            segment_key = create_segment_key(child_node, variables)
-            segment_loading_state = loading_state.get(segment_key, False)
-            active_node = child_node
-
-            if not segment_loading_state:
-                if child_node.segment == segment_key:
-                    remaining_segments.pop(0)
-                return active_node, remaining_segments, updated_segments, variables
-
-            if child_node.path_template and remaining_segments:
-                if len(remaining_segments) == 1:
-                    return active_node, remaining_segments, updated_segments, variables
-                if child_node.path_template == REST_TOKEN:
-                    variables["rest"] = remaining_segments
-                    return active_node, [], updated_segments, variables
-
-                variables[child_node.path_template.strip("<>")] = segment
-
-            updated_segments[segment_key] = 'done'
-            remaining_segments.pop(0)
-
-        return active_node, remaining_segments, updated_segments, variables
-
     def build_execution_tree(
         self,
         current_node: PageNode,
@@ -363,7 +280,6 @@ class Router:
         loading_state[segment_key] = 'done'
         return exec_node, endpoints
 
-
     def _process_slot_nodes(
         self,
         current_node: PageNode,
@@ -420,7 +336,7 @@ class Router:
 
         init_segments = [seg for seg in pathname.strip("/").split("/") if seg]
         active_node, remaining_segments, updated_segments, path_vars = (
-            RouteTree.get_active_root_node(init_segments, loading_state)
+            RouteTree.get_active_root_node(init_segments, loading_state, self.ignore_empty_folders)
         )
         print('Active node: ', active_node.segment, remaining_segments, flush=True)
         if not active_node:
@@ -475,12 +391,15 @@ class Router:
         container_id = RootContainer.ids.container
         if not active_node.is_root:
             container_id = json.dumps(
-                ChildContainer.ids.container(RootContainer.ids.container)
+                ChildContainer.ids.container(active_node.parent_id)
             )
 
-        return self._build_response(
+        response = self._build_response(
             container_id, final_layout, new_loading_state, is_init
         )
+
+        print(response, flush=True)
+        return response
     
     async def resolve_search(
         self,
@@ -546,7 +465,6 @@ class Router:
         #     container_id, final_layout, new_loading_state, is_init
         # )
 
-    
     @staticmethod
     async def gather_endpoints(endpoints: Dict[UUID, Callable[..., Awaitable[any]]]):
         if not endpoints:

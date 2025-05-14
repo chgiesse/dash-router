@@ -111,7 +111,7 @@ class ExecNode:
             layout = await child_node.execute(endpoint_results, is_init) if child_node else None
             return {
                 "children": ChildContainer(
-                    layout, self.segment, child_node.segment if child_node else None
+                    layout, self.node_id, child_node.segment if child_node else None
                 )
             }
 

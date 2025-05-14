@@ -26,13 +26,17 @@ class ExecTree:
         if not current_node:
             return current_node
 
+
     async def execute(self):
         pass    
 
     def get_loading_state(self):
         pass
 
-    def update_loading_state(self):
+    def update_ls_value(self):
+        pass
+
+    def update_ls_state(self):
         pass
 
     

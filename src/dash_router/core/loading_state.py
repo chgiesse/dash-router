@@ -1,5 +1,8 @@
-from typing import Dict
+from imaplib import ParseFlags
+from re import L
+from typing import Dict, Literal
 from ..models import LoadingStateType
+from .route_node import PageNode
 
 from pydantic import BaseModel
 from dataclasses import dataclass
@@ -14,8 +17,19 @@ class LoadingStates:
     def __init__(self, init_loading_state: Dict[str, Dict]):
         self._states = {nid: LoadingState(**ils) for nid, ils in init_loading_state.items()} 
     
-    def get_ls(self, node):
-        pass
+    def get_state(self, node: PageNode, value):
+        ls = self._states.get(node.node_id)
+        if ls:
+            return ls.state
 
-    def update_ls(self, node):
-        pass
+    def get_value(self, node: PageNode):
+        ls = self._states.get(node.node_id)
+        return ls.value
+
+    def update(self, node: PageNode, state, value):
+        ls = LoadingState(value=value, state=state)
+        self._states[node.node_id] = ls
+    
+    def update_state(self, node: PageNode, state: LoadingStateType):
+        self._states[node.node_id].state = state
+    
