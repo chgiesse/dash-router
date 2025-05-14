@@ -1,11 +1,9 @@
 from functools import partial
 import importlib
 import json
-from operator import mul
 import os
 import traceback
-from typing import Any, Awaitable, Callable, Dict, List, Literal, Tuple, Union
-from urllib import response
+from typing import Any, Awaitable, Callable, Dict, List, Literal, Tuple
 from uuid import UUID, uuid4
 
 from dash import html
@@ -15,7 +13,6 @@ from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
 from flash import Flash, Input, Output, State, MATCH, set_props
 from flash._pages import _parse_query_string
-from flask.config import T
 from quart import request
 import asyncio
 
@@ -27,6 +24,7 @@ from .utils.helper_functions import (
     create_segment_key,
     extract_function_inputs,
     format_relative_path,
+    _invoke_layout,
 )
 from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
 from .models import RouterResponse, LoadingStateType
@@ -237,7 +235,7 @@ class Router:
             exec_node.variables = current_variables
             next_segment = segments[-1] if segments else None
 
-        if is_lacy:  # current_node.endpoint and
+        if is_lacy:
             loading_state[segment_key] = "lacy"
             return exec_node, endpoints
 
@@ -328,11 +326,11 @@ class Router:
         path = self.strip_relative_path(pathname)
         static_route, path_variables = RouteTree.get_static_route(path)
         if static_route:
-            layout = await static_route.layout(
-                **query_parameters, **(path_variables or {})
+            layout = await _invoke_layout(
+                static_route.layout, **query_parameters, **path_variables
             )
-            return self._build_response(
-                RootContainer.ids.container, layout, {}, is_init
+            return self.build_response(
+                node=static_route, layout=layout, loading_state={}
             )
 
         init_segments = [seg for seg in pathname.strip("/").split("/") if seg]
@@ -487,25 +485,6 @@ class Router:
             RootContainer.ids.state_store: {"data": loading_state},
         }
         return RouterResponse(multi=True, response=response)
-
-    def _build_response(
-        self,
-        container_id: str,
-        layout: Any,
-        loading_state: Dict[str, Any] | None = None,
-        is_init: bool = True,
-    ) -> RouterResponse:
-        """
-        Wraps a rendered layout and optional state into a RouterResponse model.
-        """
-        if not is_init:
-            set_props(RootContainer.ids.state_store, {"data": loading_state or {}})
-            return layout
-        rendered_layout = recursive_to_plotly_json(layout)
-        response = {container_id: {"children": rendered_layout}}
-        if loading_state is not None:
-            response[RootContainer.ids.state_store] = {"data": loading_state}
-        return RouterResponse(multi=True, response=response).model_dump()
 
     # ─── ASYNC & SYNC ROUTER SETUP ───────────────────────────────────────────────────
     def setup_router(self) -> None:

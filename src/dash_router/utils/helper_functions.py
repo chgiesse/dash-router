@@ -1,13 +1,24 @@
+from asyncio import iscoroutinefunction
+from inspect import iscoroutine
 from .constants import DEFAULT_LAYOUT_TOKEN
 
 import os
 from _plotly_utils.optional_imports import get_module
-from plotly.io._utils import validate_coerce_fig_to_dict
 from plotly.io._json import clean_to_json_compatible, config, JsonConfig
 from typing import get_type_hints, get_origin
 from pydantic import BaseModel
 from fnmatch import fnmatch
 import re
+
+
+async def _invoke_layout(func, *func_args, **func_kwargs):
+    if iscoroutinefunction(func):
+        return await func(*func_args, **func_kwargs)
+
+    if callable(func):
+        return func(*func_args, **func_kwargs)
+
+    return func
 
 
 def create_pathtemplate_key(

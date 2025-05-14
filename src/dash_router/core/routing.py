@@ -270,7 +270,7 @@ class RouteTree:
 
     @classmethod
     def get_static_route(cls, path: str | None) -> Tuple[PageNode, Dict[str, any]]:
-        path_variables = None
+        path_variables = {}
         if not path:
             index_node = cls._static_routes.get("/")
             return index_node, path_variables

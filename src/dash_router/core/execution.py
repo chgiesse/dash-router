@@ -1,4 +1,5 @@
-from ..utils.helper_functions import create_pathtemplate_key
+from dash_router.core import loading_state
+from ..utils.helper_functions import create_pathtemplate_key, _invoke_layout
 from ..components import ChildContainer, LacyContainer, SlotContainer
 
 from dataclasses import dataclass, field
@@ -38,11 +39,7 @@ class ExecNode:
         data = endpoint_results.get(self.node_id)
 
         if self.is_lacy:
-            if callable(self.loading):
-                loading_layout = await self.loading()
-            else:
-                loading_layout = self.loading
-
+            loading_layout = await _invoke_layout(self.loading, **self.variables)
             return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
         if isinstance(data, Exception):
@@ -53,27 +50,20 @@ class ExecNode:
             self._handle_child(is_init, endpoint_results),
         )
 
-        if callable(self.layout):
-            try:
-                layout = await self.layout(
-                    **self.variables, **slots_content, **views_content, data=data
-                )
-            except Exception as e:
-                layout = await self.handle_error(e, self.variables)
+        all_kwargs = {**self.variables, **slots_content, **views_content, "data": data}
 
-            return layout
+        try:
+            layout = await _invoke_layout(self.layout, **all_kwargs)
+        except Exception as e:
+            layout = await self.handle_error(e, self.variables)
 
-        return self.layout
+        return layout
 
     async def handle_error(self, error: Exception, variables: Dict[str, any]):
         if self.error:
-            if callable(self.error):
-                layout = await self.error(
-                    error,
-                    variables,
-                )
-                return layout
-            return self.error
+            error_layout = await _invoke_layout(self.error, error, **variables)
+            return error_layout
+
         return html.Div(str(error), className="banner")
 
     async def _handle_slots(
