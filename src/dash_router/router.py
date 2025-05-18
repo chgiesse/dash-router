@@ -229,7 +229,7 @@ class Router:
             varname = current_node.segment
             if current_node.segment == REST_TOKEN:
                 varname = "rest"
-                next_segment = segments
+                next_segment = list(reversed(segments))
                 segments = []
 
             current_variables[varname] = next_segment
