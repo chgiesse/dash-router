@@ -297,7 +297,7 @@ class Router:
         for slot_name, slot_id in current_node.slots.items():
             slot_node = RouteTable.get_node(slot_id)
 
-            segment_key = create_segment_key(slot_node, current_variables)
+            segment_key = slot_node.create_segment_key(current_variables)
             loading_state[segment_key] = "done"
 
             slot_exec_node, _ = self.build_execution_tree(
@@ -414,25 +414,6 @@ class Router:
                 slot_node = self.route_table.get(slot_id)
                 print(slot_name, flush=True)
 
-        # for segment in remaining_segments:
-
-        # container_id = RootContainer.ids.container
-        # if active_node.parent_segment != "/":
-        #     if active_node.is_slot:
-        #         container_id = json.dumps(
-        #             SlotContainer.ids.container(
-        #                 active_node.parent_segment, active_node.segment
-        #             )
-        #         )
-        #     else:
-        #         container_id = json.dumps(
-        #             ChildContainer.ids.container(active_node.parent_segment)
-        #         )
-
-        # return self._build_response(
-        #     container_id, final_layout, new_loading_state, is_init
-        # )
-
     @staticmethod
     async def gather_endpoints(endpoints: Dict[UUID, Callable[..., Awaitable[any]]]):
         if not endpoints:
@@ -519,7 +500,7 @@ class Router:
             if prop == "search":
                 updated = dict(set(query_parameters.items()) - set(previous_qp.items()))
                 missing_keys = previous_qp.keys() - query_parameters.keys()
-                missing = {key: None for key in missing_keys}
+                missing = {key: None for key in missing_keys if key not in self.app.routing_callback_inputs}
                 updates = dict(updated.items() | missing.items())
                 print("query_parameters", query_parameters, flush=True)
                 print("previous_qp", previous_qp, flush=True)
@@ -527,9 +508,9 @@ class Router:
                 print("missing_keys", missing_keys, flush=True)
                 print("missing", missing, flush=True)
                 print("updates", updates, flush=True)
-                await self.resolve_search(
-                    pathname_, query_parameters, updates, loading_state_
-                )
+                # await self.resolve_search(
+                #     pathname_, query_parameters, updates, loading_state_
+                # )
 
         @self.app.server.before_serving
         async def trigger_router():

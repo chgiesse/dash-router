@@ -244,7 +244,7 @@ class RouteTree:
                 remaining_segments.append(combined)
                 continue
 
-            remaining_segments.pop()
+            remaining_segments.pop() if remaining_segments else remaining_segments
 
         return active_node, remaining_segments, updated_segments, variables
 

@@ -6,28 +6,28 @@ from typing import Dict
 
 
 class LoadingState(BaseModel):
-    value: str | int | float
+    # value: str | int | float
     state: LoadingStateType
+    node_id: str
+
+    def update_state(self, state: LoadingStateType) -> None:
+        self.state = state
 
 
 class LoadingStates:
     def __init__(self, init_loading_state: Dict[str, Dict]):
         self._states = {
-            nid: LoadingState(**ils) for nid, ils in init_loading_state.items()
+            segment_key: LoadingState(**ils) for segment_key, ils in init_loading_state.items()
         }
 
-    def get_state(self, node: PageNode, value):
-        ls = self._states.get(node.node_id)
+    def get_state_obj(self, node: PageNode, segment_key: str):
+        ls = self._states.get(segment_key)
         if ls:
             return ls.state
 
-    def get_value(self, node: PageNode):
-        ls = self._states.get(node.node_id)
-        return ls.value
-
-    def update(self, node: PageNode, state, value):
-        ls = LoadingState(value=value, state=state)
-        self._states[node.node_id] = ls
-
-    def update_state(self, node: PageNode, state: LoadingStateType):
-        self._states[node.node_id].state = state
+        if node:
+            new_loading_state = LoadingState(state=None, node_id=node.node_id)
+            self._states[segment_key] = new_loading_state
+            return new_loading_state
+    
+    
