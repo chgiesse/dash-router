@@ -199,11 +199,16 @@ class RouteTree:
         remaining_segments = list(reversed(remaining_segments))
         updated_segments = {}
 
+        # If no active node found, return early
+        if not active_node:
+            return active_node, remaining_segments, updated_segments, variables
+
+        # Process the active node first
+        next_segment = remaining_segments[-1] if remaining_segments else None
+        segment_key = active_node.create_segment_key(next_segment)
+        updated_segments[segment_key] = "done"
+
         while remaining_segments:
-
-            if active_node is None:
-                return active_node, remaining_segments, updated_segments, variables
-
             next_segment = remaining_segments[-1] if remaining_segments else None
             segment_key = active_node.create_segment_key(next_segment)
             segment_loading_state = loading_state.get(segment_key)
@@ -212,7 +217,6 @@ class RouteTree:
                 return active_node, remaining_segments, updated_segments, variables
 
             if active_node.is_path_template:
-
                 if len(remaining_segments) <= 1:
                     return active_node, remaining_segments, updated_segments, variables
 
@@ -221,30 +225,36 @@ class RouteTree:
                     varname = "rest"
                     next_segment = remaining_segments
                     remaining_segments = []
-
-                variables[varname] = next_segment
-                remaining_segments = remaining_segments[:-1]
-                next_segment = remaining_segments[-1] if remaining_segments else None
+                else:
+                    variables[varname] = next_segment
+                    remaining_segments = remaining_segments[:-1]
+                    next_segment = remaining_segments[-1] if remaining_segments else None
 
             updated_segments[segment_key] = "done"
 
-            if child_node := active_node.get_child_node(next_segment):
-                remaining_segments = (
-                    remaining_segments[:-1]
-                    if not child_node.is_path_template
-                    else remaining_segments
-                )
+            # Try to get the next child node
+            child_node = active_node.get_child_node(next_segment)
+            if child_node:
+                # Update remaining segments based on child node type
+                if not child_node.is_path_template:
+                    remaining_segments = remaining_segments[:-1]
                 active_node = child_node
+                next_segment = remaining_segments[-1] if remaining_segments else None
                 continue
 
+            # Handle empty folders if needed
             if not ignore_empty_folders and len(remaining_segments) > 1:
                 first = remaining_segments.pop()
                 second = remaining_segments.pop()
                 combined = f"{first}/{second}"
                 remaining_segments.append(combined)
+                next_segment = remaining_segments[-1] if remaining_segments else None
                 continue
 
-            remaining_segments.pop() if remaining_segments else remaining_segments
+            # If no child node found and no empty folder handling, pop the current segment
+            if remaining_segments:
+                remaining_segments.pop()
+                next_segment = remaining_segments[-1] if remaining_segments else None
 
         return active_node, remaining_segments, updated_segments, variables
 
@@ -287,3 +297,72 @@ class RouteTree:
                 return page_node, path_variables
 
         return None, path_variables
+
+    @classmethod
+    def get_active_root_node_with_context(
+        cls,
+        context: "RoutingContext",
+        ignore_empty_folders: bool,
+    ):
+        active_node, remaining_segments, variables = cls.get_root_node(context._segments)
+        context._segments = list(reversed(remaining_segments))
+        updated_segments = {}
+
+        # If no active node found, return early
+        if not active_node:
+            return active_node, context._segments, updated_segments, variables
+
+        # Process the active node first
+        next_segment = context.peek_segment()
+        segment_key = active_node.create_segment_key(next_segment)
+        updated_segments[segment_key] = "done"
+
+        while context._segments:
+            next_segment = context.peek_segment()
+            segment_key = active_node.create_segment_key(next_segment)
+            segment_loading_state = context.get_node_state(active_node, next_segment)
+
+            if not segment_loading_state or segment_loading_state == "lacy":
+                return active_node, context._segments, updated_segments, variables
+
+            if active_node.is_path_template:
+                if len(context._segments) <= 1:
+                    return active_node, context._segments, updated_segments, variables
+
+                varname = active_node.segment
+                if active_node.segment == REST_TOKEN:
+                    varname = "rest"
+                    next_segment = list(reversed(context._segments))
+                    context._segments = []
+                else:
+                    variables[varname] = next_segment
+                    context.pop_segment()
+                    next_segment = context.peek_segment()
+
+            updated_segments[segment_key] = "done"
+
+            # Try to get the next child node
+            child_node = active_node.get_child_node(next_segment)
+            if child_node:
+                # Update remaining segments based on child node type
+                if not child_node.is_path_template:
+                    context.pop_segment()
+                active_node = child_node
+                next_segment = context.peek_segment()
+                continue
+
+            # Handle empty folders if needed
+            if not ignore_empty_folders and len(context._segments) > 1:
+                first = context.pop_segment()
+                second = context.pop_segment()
+                combined = f"{first}/{second}"
+                context._segments.append(combined)
+                next_segment = context.peek_segment()
+                continue
+
+            # If no child node found and no empty folder handling, pop the current segment
+            if context._segments:
+                context.pop_segment()
+                next_segment = context.peek_segment()
+
+        return active_node, context._segments, updated_segments, variables
