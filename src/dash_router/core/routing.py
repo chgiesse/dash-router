@@ -94,7 +94,7 @@ class PageNode(BaseModel):
 
     def create_segment_key(self, var):
         if not self.is_path_template:
-            return self.segment
+            return self.segment_value
 
         path_key = self.segment_value
         path_var = var or DEFAULT_LAYOUT_TOKEN

@@ -2,6 +2,7 @@ from functools import partial
 import importlib
 import json
 import os
+from re import L
 import traceback
 from typing import Any, Awaitable, Callable, Dict, List, Literal, Tuple
 from uuid import UUID, uuid4
@@ -258,7 +259,8 @@ class Router:
         slot_exec_nodes: Dict[str, ExecNode] = {}
         for slot_name, slot_id in current_node.slots.items():
             slot_node = RouteTable.get_node(slot_id)
-            ctx.set_node_state(slot_node, "done", slot_node.segment_value)
+            segment_key = slot_node.create_segment_key(None)
+            ctx.set_node_state(slot_node, "done", segment_key)
 
             slot_exec_node = self.build_execution_tree(
                 current_node=slot_node,
@@ -333,42 +335,21 @@ class Router:
     ) -> RouterResponse:
 
         path = self.strip_relative_path(pathname)
-        init_segments = [seg for seg in pathname.strip("/").split("/") if seg]
-        active_node, remaining_segments, updated_segments, path_vars = (
-            self._get_root_node(init_segments, {})
+        ctx: RoutingContext = RoutingContext.from_request(
+            pathname=path,
+            loading_state_dict=loading_state,
+            is_init=False,
+            query_params=query_params
         )
-        segment_key = create_segment_key(active_node, path_vars)
-        active_loading_state = loading_state.get(segment_key)
-        print("segment_key", segment_key, flush=True)
-        print("active_loading_state", active_loading_state, flush=True)
-        print("updated_query_parameters", updated_query_parameters, flush=True)
-        print("query_params", query_params, flush=True)
-        print("endpoint_inputs", active_node.endpoint_inputs, flush=True)
 
-        if set(active_node.endpoint_inputs.keys()).intersection(
-            set(updated_query_parameters.keys())
-        ):
-            # exec_node = ExecNode(
-            #     node_id=current_node.node_id,
-            #     layout=current_node.layout,
-            #     segment=current_node.segment,
-            #     parent_segment=current_node.parent_segment,
-            #     variables=current_variables,
-            #     loading_state=loading_state,
-            #     path_template=current_node.path_template,
-            #     loading=current_node.loading,
-            #     error=current_node.error,
-            #     path=request_pathname,
-            # )
-            print("Load function", active_node.segment, flush=True)
+        eligable_nodes = []
+        for segment_key, loaded_node in ctx.loading_states._states.items():
+            node_id = loaded_node.node_id
+            node = RouteTable.get_node(node_id)
+            if any(node_input in updated_query_parameters for node_input in node.endpoint_inputs):
+                eligable_nodes.append(node)
 
-        for segment in remaining_segments:
-            current_node = active_node if not current_node else current_node
-            next_node = active_node.get_child_node(segment, self.route_table)
-
-            for slot_name, slot_id in current_node.slots.items():
-                slot_node = self.route_table.get(slot_id)
-                print(slot_name, flush=True)
+        print(eligable_nodes, flush=True)
 
     @staticmethod
     async def gather_endpoints(endpoints: Dict[UUID, Callable[..., Awaitable[any]]]):
@@ -429,7 +410,6 @@ class Router:
             if changed_prop_id != RootContainer.ids.location:
                 return
 
-            print("--------", flush=True)
             output = body["output"]
             inputs = body.get("inputs", [])
             state = body.get("state", [])
@@ -439,16 +419,14 @@ class Router:
             pathname_, search_, loading_state_, states_ = args
             query_parameters = _parse_query_string(search_)
             previous_qp = loading_state_.pop("query_params", {})
+            _, func_kwargs = validate_and_group_input_args(
+                args, inputs_state_indices
+            )
+            func_kwargs = dict(list(func_kwargs.items())[3:])
+            varibales = {**query_parameters, **func_kwargs}
 
             if prop == "pathname":
                 try:
-                    # Skip the arguments required for routing
-                    _, func_kwargs = validate_and_group_input_args(
-                        args, inputs_state_indices
-                    )
-                    func_kwargs = dict(list(func_kwargs.items())[3:])
-                    varibales = {**query_parameters, **func_kwargs}
-
                     response = await self.resolve_url(
                         pathname_, varibales, loading_state_
                     )
@@ -472,6 +450,7 @@ class Router:
                 print("missing_keys", missing_keys, flush=True)
                 print("missing", missing, flush=True)
                 print("updates", updates, flush=True)
+                await self.resolve_search(pathname_, varibales, updates, loading_state_)
 
         @self.app.server.before_serving
         async def trigger_router():
