@@ -1,6 +1,7 @@
 from ..models import LoadingStateType
 from ..utils.helper_functions import _parse_path_variables
 from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
+from .context import RoutingContext
 
 from typing import Callable, Dict, List, Awaitable, Optional, ClassVar, Tuple
 from dash.development.base_component import Component
@@ -163,90 +164,66 @@ class RouteTree:
         cls._dynamic_routes.routes[new_node.segment] = new_node.node_id
 
     @classmethod
-    def get_root_node(cls, segments: List[str]) -> Tuple[PageNode, List, Dict]:
+    def get_root_node(cls, ctx: RoutingContext) -> Optional[PageNode]:
         missed_segments: str = None
         node: PageNode = None
-        path_variables: Dict = {}
 
-        for segment in segments:
+        for segment in ctx.segments:
             if missed_segments:
                 segment = missed_segments + "/" + segment
 
             if node_id := cls._dynamic_routes.routes.get(segment):
                 node = RouteTable.get_node(node_id)
-                segments = segments[1:]
-                return node, segments, path_variables
+                ctx.segments.pop(0)
+                return node
 
             if node_id := cls._dynamic_routes.path_template:
                 node = RouteTable.get_node(node_id)
-                path_variables[node.segment] = segment
-                return node, segments, path_variables
+                ctx.path_vars[node.segment] = segment
+                return node
 
             missed_segments = segment
-            segments = segments[1:]
+            ctx.segments.pop(0)
 
-        remaining_segments = segments
-        return node, remaining_segments, path_variables
+        return node
 
     @classmethod
-    def get_active_root_node(
-        cls,
-        segments: List[str],
-        loading_state: Dict[str, LoadingStateType],
-        ignore_empty_folders: bool,
-    ):
-        active_node, remaining_segments, variables = cls.get_root_node(segments)
-        remaining_segments = list(reversed(remaining_segments))
-        updated_segments = {}
+    def get_active_root_node(cls, ctx: RoutingContext, ignore_empty_folders: bool):
+        active_node = cls.get_root_node(ctx.segments)
+        ctx.segments = list(reversed(ctx.segments))
 
-        while remaining_segments:
+        while ctx.segments:
 
             if active_node is None:
-                return active_node, remaining_segments, updated_segments, variables
+                return active_node
 
-            next_segment = remaining_segments[-1] if remaining_segments else None
+            next_segment = ctx.peek_segment()
             segment_key = active_node.create_segment_key(next_segment)
-            segment_loading_state = loading_state.get(segment_key)
+            segment_loading_state = ctx.get_node_state(active_node, segment_key)
 
             if not segment_loading_state or segment_loading_state == "lacy":
-                return active_node, remaining_segments, updated_segments, variables
+                return active_node
 
             if active_node.is_path_template:
 
-                if len(remaining_segments) <= 1:
-                    return active_node, remaining_segments, updated_segments, variables
+                if len(ctx.segments) <= 1:
+                    return active_node
 
-                varname = active_node.segment
-                if active_node.segment == REST_TOKEN:
-                    varname = "rest"
-                    next_segment = remaining_segments
-                    remaining_segments = []
+                ctx.consume_path_var(active_node)
+                next_segment = ctx.peek_segment()
 
-                variables[varname] = next_segment
-                remaining_segments = remaining_segments[:-1]
-                next_segment = remaining_segments[-1] if remaining_segments else None
-
-            updated_segments[segment_key] = "done"
+            ctx.set_node_state(active_node, "done", segment_key)
 
             if child_node := active_node.get_child_node(next_segment):
-                remaining_segments = (
-                    remaining_segments[:-1]
-                    if not child_node.is_path_template
-                    else remaining_segments
-                )
+                if not child_node.is_path_template:
+                    ctx.pop_segment()
+                
                 active_node = child_node
                 continue
 
-            if not ignore_empty_folders and len(remaining_segments) > 1:
-                first = remaining_segments.pop()
-                second = remaining_segments.pop()
-                combined = f"{first}/{second}"
-                remaining_segments.append(combined)
-                continue
+            ctx.merge_segments(ignore_empty_folders)
 
-            remaining_segments.pop() if remaining_segments else remaining_segments
-
-        return active_node, remaining_segments, updated_segments, variables
+        return active_node
 
     @classmethod
     def add_node(cls, new_node: PageNode, parent_node: PageNode | None) -> None:
@@ -269,20 +246,20 @@ class RouteTree:
         parent_node.register_route(new_node)
 
     @classmethod
-    def get_static_route(cls, path: str | None) -> Tuple[PageNode, Dict[str, any]]:
+    def get_static_route(cls, ctx: RoutingContext) -> Tuple[PageNode, Dict[str, any]]:
         path_variables = {}
-        if not path:
+        if not ctx.pathname:
             index_node = cls._static_routes.get("/")
             return index_node, path_variables
 
         for page_path, page_id in cls._static_routes.items():
             if "[" in page_path and "]" in page_path:
-                path_variables = _parse_path_variables(path, page_path)
+                path_variables = _parse_path_variables(ctx.pathname, page_path)
                 if path_variables:
                     page_node = RouteTable.get_node(page_id)
                     return page_node, path_variables
 
-            if path == page_path:
+            if ctx.pathname == page_path:
                 page_node = RouteTable.get_node(page_id)
                 return page_node, path_variables
 

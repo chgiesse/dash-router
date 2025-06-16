@@ -11,6 +11,7 @@ from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
+from dash_router.core.context import RoutingContext
 from flash import Flash, Input, Output, State, MATCH, set_props
 from flash._pages import _parse_query_string
 from quart import request
@@ -186,81 +187,52 @@ class Router:
     def build_execution_tree(
         self,
         current_node: PageNode,
-        segments: List[str],
-        parent_variables: Dict[str, str],
-        query_params: Dict[str, Any],
-        loading_state: LoadingStateType,
-        request_pathname: str,
-        endpoints: Dict[UUID, Callable[..., Awaitable[any]]],
+        ctx: RoutingContext,
         is_init: bool,
-    ) -> Tuple[ExecNode, Dict[UUID, Callable[..., Awaitable[any]]]]:
+    ) -> ExecNode:
         """
         Recursively builds the execution tree for the matched route.
         It extracts any path variables, processes child nodes, and handles slot nodes.
         """
 
         if not current_node:
-            return current_node, endpoints
-
-        current_variables = {**parent_variables, **query_params}
-        next_segment = segments[-1] if segments else None
+            return current_node
+        
+        next_segment = ctx.peek_segment()
         segment_key = current_node.create_segment_key(next_segment)
-        is_default = DEFAULT_LAYOUT_TOKEN in segment_key
-        current_loading_state = loading_state.get(segment_key)
-        is_lacy = (
-            current_loading_state != "lacy"
-            and current_node.loading is not None
-            and not is_default
-            and is_init
-        )
+        is_lacy = ctx.should_lazy_load(current_node, next_segment)
 
+        if current_node.is_path_template:
+            ctx.consume_path_var(current_node)
+            next_segment = ctx.peek_segment()
+        
         exec_node = ExecNode(
             segment=segment_key,
             node_id=current_node.node_id,
             layout=current_node.layout,
             parent_id=current_node.parent_id,
-            variables=current_variables,
+            variables=ctx.path_vars.copy(),
             loading=current_node.loading,
             error=current_node.error,
             is_lacy=is_lacy,
         )
 
-        if current_node.is_path_template:
-            varname = current_node.segment
-            if current_node.segment == REST_TOKEN:
-                varname = "rest"
-                next_segment = list(reversed(segments))
-                segments = []
-
-            current_variables[varname] = next_segment
-            segments = segments[:-1]
-            exec_node.variables = current_variables
-            next_segment = segments[-1] if segments else None
-
         if is_lacy:
-            loading_state[segment_key] = "lacy"
-            return exec_node, endpoints
+            ctx.set_node_state(current_node, "lacy", segment_key)
+            return exec_node
 
-        if current_node.endpoint and not is_default:
-            partial_endpoint = partial(current_node.endpoint, **current_variables)
-            endpoints[current_node.node_id] = partial_endpoint
+        if current_node.endpoint and not DEFAULT_LAYOUT_TOKEN in segment_key:
+            ctx.add_endpoint(current_node)
 
         if current_node.child_nodes or current_node.path_template:
             child_node = current_node.get_child_node(next_segment)
-            segments = (
-                segments[:-1]
-                if not child_node or not child_node.is_path_template
-                else segments
-            )
 
-            child_exec, _ = self.build_execution_tree(
+            if not child_node or not child_node.is_path_template:
+                ctx.pop_segment()
+
+            child_exec = self.build_execution_tree(
                 current_node=child_node,
-                segments=segments.copy(),
-                parent_variables=current_variables,
-                query_params=query_params,
-                loading_state=loading_state,
-                request_pathname=request_pathname,
-                endpoints=endpoints,
+                ctx=ctx,
                 is_init=is_init,
             )
 
@@ -269,45 +241,28 @@ class Router:
         if current_node.slots:
             exec_node.slots = self._process_slot_nodes(
                 current_node=current_node,
-                segments=segments.copy(),
-                current_variables=current_variables,
-                query_params=query_params,
-                loading_state=loading_state,
-                requests_pathname=request_pathname,
-                endpoints=endpoints,
+                ctx=ctx,
                 is_init=is_init,
             )
 
-        loading_state[segment_key] = "done"
-        return exec_node, endpoints
+        ctx.set_node_state(current_node, "done", segment_key)
+        return exec_node
 
     def _process_slot_nodes(
         self,
         current_node: PageNode,
-        segments: List[str],
-        current_variables: Dict[str, str],
-        query_params: Dict[str, Any],
-        loading_state: LoadingStateType,
-        requests_pathname: str,
-        endpoints: Dict[UUID, Callable[..., Awaitable[any]]],
+        ctx: RoutingContext,
         is_init: bool = True,
     ) -> Dict[str, ExecNode]:
         """Processes all slot nodes defined on the current node."""
         slot_exec_nodes: Dict[str, ExecNode] = {}
         for slot_name, slot_id in current_node.slots.items():
             slot_node = RouteTable.get_node(slot_id)
+            ctx.set_node_state(slot_node, "done", slot_node.segment_value)
 
-            segment_key = slot_node.create_segment_key(current_variables)
-            loading_state[segment_key] = "done"
-
-            slot_exec_node, _ = self.build_execution_tree(
+            slot_exec_node = self.build_execution_tree(
                 current_node=slot_node,
-                segments=segments.copy(),
-                parent_variables=current_variables,
-                query_params=query_params,
-                loading_state=loading_state,
-                request_pathname=requests_pathname,
-                endpoints=endpoints,
+                ctx=ctx,
                 is_init=is_init,
             )
 
@@ -316,7 +271,7 @@ class Router:
         return slot_exec_nodes
 
     # ─── RESPONSE BUILDER ─────────────────────────────────────
-    async def dispatch(
+    async def resolve_url(
         self,
         pathname: str,
         query_parameters: Dict[str, any],
@@ -325,7 +280,14 @@ class Router:
     ) -> RouterResponse:
 
         path = self.strip_relative_path(pathname)
-        static_route, path_variables = RouteTree.get_static_route(path)
+        ctx = RoutingContext.from_request(
+            pathname=path,
+            query_params=query_parameters,
+            loading_state_dict=loading_state,
+            is_init=is_init
+        )
+
+        static_route, path_variables = RouteTree.get_static_route(ctx)        
         if static_route:
             layout = await _invoke_layout(
                 static_route.layout, **query_parameters, **path_variables
@@ -334,33 +296,27 @@ class Router:
                 node=static_route, layout=layout, loading_state={}
             )
 
-        init_segments = [seg for seg in pathname.strip("/").split("/") if seg]
-        active_node, remaining_segments, updated_segments, path_vars = (
-            RouteTree.get_active_root_node(
-                init_segments, loading_state, self.ignore_empty_folders
-            )
-        )
+        active_node = RouteTree.get_active_root_node(ctx, self.ignore_empty_folders)
+
         if not active_node:
             return self.build_response(node=None, loading_state={})
 
-        exec_tree, endpoints = self.build_execution_tree(
+        exec_tree = self.build_execution_tree(
             current_node=active_node,
-            segments=remaining_segments,
-            parent_variables=path_vars,
-            query_params=query_parameters,
-            loading_state=updated_segments,
-            request_pathname=path,
+            ctx=ctx,
             is_init=is_init,
-            endpoints={},
         )
 
         if not exec_tree:
             return self.build_response(node=None, loading_state={})
 
-        result_data = await self.gather_endpoints(endpoints)
+        result_data = await ctx.gather_endpoints()
         final_layout = await exec_tree.execute(result_data, is_init)
 
-        new_loading_state = {**updated_segments, "query_params": query_parameters}
+        new_loading_state = {
+            **ctx.loading_states.to_dict(), 
+            "query_params": query_parameters
+        }
 
         response = self.build_response(
             node=active_node, loading_state=new_loading_state, layout=final_layout
@@ -483,6 +439,7 @@ class Router:
             pathname_, search_, loading_state_, states_ = args
             query_parameters = _parse_query_string(search_)
             previous_qp = loading_state_.pop("query_params", {})
+
             if prop == "pathname":
                 try:
                     # Skip the arguments required for routing
@@ -491,7 +448,8 @@ class Router:
                     )
                     func_kwargs = dict(list(func_kwargs.items())[3:])
                     varibales = {**query_parameters, **func_kwargs}
-                    response = await self.dispatch(pathname_, varibales, loading_state_)
+
+                    response = await self.resolve_url(pathname_, varibales, loading_state_)
                     return response.model_dump()
                 except Exception:
                     print(f"Traceback: {traceback.format_exc()}")
