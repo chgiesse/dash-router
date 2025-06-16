@@ -2,7 +2,17 @@ from ..models import LoadingStateType
 from ..utils.helper_functions import _parse_path_variables
 from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
 
-from typing import Any, Callable, Dict, List, Awaitable, Optional, ClassVar, Tuple, TYPE_CHECKING
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Awaitable,
+    Optional,
+    ClassVar,
+    Tuple,
+    TYPE_CHECKING,
+)
 from dash.development.base_component import Component
 from dash._utils import AttributeDict
 from pydantic import BaseModel, Field
@@ -216,7 +226,7 @@ class RouteTree:
             if child_node := active_node.get_child_node(next_segment):
                 if not child_node.is_path_template:
                     ctx.pop_segment()
-                
+
                 active_node = child_node
                 continue
 

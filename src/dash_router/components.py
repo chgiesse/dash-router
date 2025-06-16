@@ -76,7 +76,7 @@ class RootContainer(html.Div):
     def __init__(self) -> None:
         super().__init__(
             [
-                dcc.Location(id=self.ids.location, refresh='callback-nav'),
+                dcc.Location(id=self.ids.location, refresh="callback-nav"),
                 html.Div(id=self.ids.container, disable_n_clicks=True),
                 dcc.Store(id=self.ids.state_store, data={}),
                 html.Div(id=self.ids.dummy, disable_n_clicks=True),

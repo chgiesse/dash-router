@@ -18,7 +18,8 @@ class LoadingState(BaseModel):
 class LoadingStates:
     def __init__(self, init_loading_state: Dict[str, Dict]):
         self._states = {
-            segment_key: LoadingState(**ils) for segment_key, ils in init_loading_state.items()
+            segment_key: LoadingState(**ils)
+            for segment_key, ils in init_loading_state.items()
         }
 
     def clear(self) -> None:
@@ -32,10 +33,14 @@ class LoadingStates:
             return ls.state
         return None
 
-    def set_state(self, node_id: str, segment_key: str, state: LoadingStateType) -> None:
+    def set_state(
+        self, node_id: str, segment_key: str, state: LoadingStateType
+    ) -> None:
         """Set loading state for a node and segment key"""
         if segment_key not in self._states:
-            self._states[segment_key] = LoadingState(state=state, node_id=node_id, updated=True)
+            self._states[segment_key] = LoadingState(
+                state=state, node_id=node_id, updated=True
+            )
         else:
             self._states[segment_key].update_state(state)
 
@@ -55,5 +60,3 @@ class LoadingStates:
             for key, state in self._states.items()
             if state.updated == True
         }
-    
-    

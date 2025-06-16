@@ -197,7 +197,7 @@ class Router:
 
         if not current_node:
             return current_node
-        
+
         next_segment = ctx.peek_segment()
         segment_key = current_node.create_segment_key(next_segment)
         is_lacy = ctx.should_lazy_load(current_node, next_segment)
@@ -205,7 +205,7 @@ class Router:
         if current_node.is_path_template:
             ctx.consume_path_var(current_node)
             next_segment = ctx.peek_segment()
-        
+
         exec_node = ExecNode(
             segment=segment_key,
             node_id=current_node.node_id,
@@ -284,10 +284,10 @@ class Router:
             pathname=path,
             query_params=query_parameters,
             loading_state_dict=loading_state,
-            is_init=is_init
+            is_init=is_init,
         )
 
-        static_route, path_variables = RouteTree.get_static_route(ctx)        
+        static_route, path_variables = RouteTree.get_static_route(ctx)
         if static_route:
             layout = await _invoke_layout(
                 static_route.layout, **query_parameters, **path_variables
@@ -314,8 +314,8 @@ class Router:
         final_layout = await exec_tree.execute(result_data, is_init)
 
         new_loading_state = {
-            **ctx.loading_states.to_dict(), 
-            "query_params": query_parameters
+            **ctx.loading_states.to_dict(),
+            "query_params": query_parameters,
         }
 
         response = self.build_response(
@@ -449,7 +449,9 @@ class Router:
                     func_kwargs = dict(list(func_kwargs.items())[3:])
                     varibales = {**query_parameters, **func_kwargs}
 
-                    response = await self.resolve_url(pathname_, varibales, loading_state_)
+                    response = await self.resolve_url(
+                        pathname_, varibales, loading_state_
+                    )
                     return response.model_dump()
                 except Exception:
                     print(f"Traceback: {traceback.format_exc()}")
@@ -458,7 +460,11 @@ class Router:
             if prop == "search":
                 updated = dict(set(query_parameters.items()) - set(previous_qp.items()))
                 missing_keys = previous_qp.keys() - query_parameters.keys()
-                missing = {key: None for key in missing_keys if key not in self.app.routing_callback_inputs}
+                missing = {
+                    key: None
+                    for key in missing_keys
+                    if key not in self.app.routing_callback_inputs
+                }
                 updates = dict(updated.items() | missing.items())
                 print("query_parameters", query_parameters, flush=True)
                 print("previous_qp", previous_qp, flush=True)
@@ -466,9 +472,6 @@ class Router:
                 print("missing_keys", missing_keys, flush=True)
                 print("missing", missing, flush=True)
                 print("updates", updates, flush=True)
-                # await self.resolve_search(
-                #     pathname_, query_parameters, updates, loading_state_
-                # )
 
         @self.app.server.before_serving
         async def trigger_router():
@@ -503,13 +506,12 @@ class Router:
         async def load_lacy_component(
             lacy_segment_id, variables, pathname, search, loading_state
         ):
-            print(loading_state, flush=True)
-            
             node_id = lacy_segment_id.get("index")
-            query_parameters = _parse_query_string(search)
+            qs = _parse_query_string(search)
             query_parameters = loading_state.pop("query_params", {})
             node_variables = json.loads(variables)
-            variables = {**query_parameters, **node_variables}
+            variables = {**qs, **query_parameters, **node_variables}
+
             lacy_node = RouteTable.get_node(node_id)
             path = self.strip_relative_path(pathname)
             segments = path.split("/")
@@ -521,7 +523,7 @@ class Router:
                 pathname=pathname,
                 query_params=variables,
                 loading_state_dict=loading_state,
-                is_init=False
+                is_init=False,
             )
 
             ctx.segments = remaining_segments
@@ -542,8 +544,6 @@ class Router:
                 key: val if val.get("state") != "lacy" else {**val, "state": "done"}
                 for key, val in loading_state.items()
             }
-
-            print(f"updated loading state | segment: {lacy_node.segment}", new_loading_state, flush=True)
 
             if layout:
                 set_props(RootContainer.ids.state_store, {"data": new_loading_state})
