@@ -1,9 +1,8 @@
 from ..models import LoadingStateType
 from ..utils.helper_functions import _parse_path_variables
 from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
-from .context import RoutingContext
 
-from typing import Callable, Dict, List, Awaitable, Optional, ClassVar, Tuple
+from typing import Any, Callable, Dict, List, Awaitable, Optional, ClassVar, Tuple, TYPE_CHECKING
 from dash.development.base_component import Component
 from dash._utils import AttributeDict
 from pydantic import BaseModel, Field
@@ -37,8 +36,8 @@ class PageNode(BaseModel):
     path_template: Optional[str] = None
     loading: Optional[Callable[..., Awaitable[Component]] | Component] = None
     error: Optional[Callable[..., Awaitable[Component]] | Component] = None
-    endpoint: Optional[Callable[..., Awaitable[any]]] = None
-    endpoint_inputs: Optional[List[any]] = None
+    endpoint: Optional[Callable[..., Awaitable[Any]]] = None
+    endpoint_inputs: Optional[List[Any]] = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -164,7 +163,7 @@ class RouteTree:
         cls._dynamic_routes.routes[new_node.segment] = new_node.node_id
 
     @classmethod
-    def get_root_node(cls, ctx: RoutingContext) -> Optional[PageNode]:
+    def get_root_node(cls, ctx) -> Optional[PageNode]:
         missed_segments: str = None
         node: PageNode = None
 
@@ -188,8 +187,8 @@ class RouteTree:
         return node
 
     @classmethod
-    def get_active_root_node(cls, ctx: RoutingContext, ignore_empty_folders: bool):
-        active_node = cls.get_root_node(ctx.segments)
+    def get_active_root_node(cls, ctx, ignore_empty_folders: bool):
+        active_node = cls.get_root_node(ctx)
         ctx.segments = list(reversed(ctx.segments))
 
         while ctx.segments:
@@ -199,7 +198,7 @@ class RouteTree:
 
             next_segment = ctx.peek_segment()
             segment_key = active_node.create_segment_key(next_segment)
-            segment_loading_state = ctx.get_node_state(active_node, segment_key)
+            segment_loading_state = ctx.get_node_state(segment_key)
 
             if not segment_loading_state or segment_loading_state == "lacy":
                 return active_node
@@ -246,7 +245,7 @@ class RouteTree:
         parent_node.register_route(new_node)
 
     @classmethod
-    def get_static_route(cls, ctx: RoutingContext) -> Tuple[PageNode, Dict[str, any]]:
+    def get_static_route(cls, ctx) -> Tuple[PageNode, Dict[str, Any]]:
         path_variables = {}
         if not ctx.pathname:
             index_node = cls._static_routes.get("/")

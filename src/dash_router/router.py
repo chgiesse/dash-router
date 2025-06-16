@@ -211,7 +211,7 @@ class Router:
             node_id=current_node.node_id,
             layout=current_node.layout,
             parent_id=current_node.parent_id,
-            variables=ctx.path_vars.copy(),
+            variables=ctx.variables,
             loading=current_node.loading,
             error=current_node.error,
             is_lacy=is_lacy,
@@ -503,9 +503,13 @@ class Router:
         async def load_lacy_component(
             lacy_segment_id, variables, pathname, search, loading_state
         ):
+            print(loading_state, flush=True)
+            
             node_id = lacy_segment_id.get("index")
             query_parameters = _parse_query_string(search)
+            query_parameters = loading_state.pop("query_params", {})
             node_variables = json.loads(variables)
+            variables = {**query_parameters, **node_variables}
             lacy_node = RouteTable.get_node(node_id)
             path = self.strip_relative_path(pathname)
             segments = path.split("/")
@@ -513,25 +517,34 @@ class Router:
             current_index = node_segments.index(lacy_node.segment_value)
             remaining_segments = list(reversed(segments[current_index:]))
 
-            exec_tree, endpoints = self.build_execution_tree(
+            ctx = RoutingContext.from_request(
+                pathname=pathname,
+                query_params=variables,
+                loading_state_dict=loading_state,
+                is_init=False
+            )
+
+            ctx.segments = remaining_segments
+
+            exec_tree = self.build_execution_tree(
                 current_node=lacy_node,
-                segments=remaining_segments,
-                parent_variables=node_variables,
-                query_params=query_parameters,
-                loading_state=loading_state,
-                request_pathname=path,
-                endpoints={},
+                ctx=ctx,
                 is_init=False,
             )
 
-            endpoint_results = await self.gather_endpoints(endpoints)
+            endpoint_results = await ctx.gather_endpoints()
             layout = await exec_tree.execute(
                 is_init=False, endpoint_results=endpoint_results
             )
+
+            loading_state = {**loading_state, **ctx.loading_states.to_dict()}
             new_loading_state = {
-                key: val if val != "lacy" else "done"
+                key: val if val.get("state") != "lacy" else {**val, "state": "done"}
                 for key, val in loading_state.items()
             }
+
+            print(f"updated loading state | segment: {lacy_node.segment}", new_loading_state, flush=True)
+
             if layout:
                 set_props(RootContainer.ids.state_store, {"data": new_loading_state})
             return layout

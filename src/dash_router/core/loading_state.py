@@ -1,5 +1,4 @@
 from dash_router.models import LoadingStateType
-from dash_router.core.routing import PageNode
 
 from pydantic import BaseModel
 from typing import Dict, Optional
@@ -9,7 +8,7 @@ class LoadingState(BaseModel):
     # value: str | int | float
     state: LoadingStateType
     node_id: str
-    updated: bool
+    updated: bool = False
 
     def update_state(self, state: LoadingStateType) -> None:
         self.state = state
@@ -26,17 +25,17 @@ class LoadingStates:
         """Clear all loading states"""
         self._states.clear()
 
-    def get_state(self, node: PageNode, segment_key: str) -> Optional[LoadingStateType]:
+    def get_state(self, segment_key: str) -> Optional[LoadingStateType]:
         """Get loading state for a node and segment key"""
         ls = self._states.get(segment_key)
         if ls:
             return ls.state
         return None
 
-    def set_state(self, node: PageNode, segment_key: str, state: LoadingStateType) -> None:
+    def set_state(self, node_id: str, segment_key: str, state: LoadingStateType) -> None:
         """Set loading state for a node and segment key"""
         if segment_key not in self._states:
-            self._states[segment_key] = LoadingState(state=state, node_id=node.node_id, updated=True)
+            self._states[segment_key] = LoadingState(state=state, node_id=node_id, updated=True)
         else:
             self._states[segment_key].update_state(state)
 

@@ -21,6 +21,10 @@ class RoutingContext:
     is_init: bool = True
     segments: List[str] = field(default_factory=list)
     
+    @property
+    def variables(self):
+        return {**self.query_params, **self.path_vars}
+
     @classmethod
     def from_request(cls, pathname: str, query_params: Dict[str, Any], 
                      loading_state_dict: Dict[str, Dict], is_init: bool = True) -> "RoutingContext":
@@ -41,16 +45,16 @@ class RoutingContext:
             segments=segments
         )
     
-    def get_node_state(self, node: PageNode, segment_key: Optional[str] = None) -> Optional[str]:
+    def get_node_state(self, segment_key: Optional[str] = None) -> Optional[str]:
         """Get loading state for a node"""
-        return self.loading_states.get_state(node, segment_key)
+        return self.loading_states.get_state(segment_key)
     
     def set_node_state(self, node: PageNode, state: str, segment_key: Optional[str] = None):
         """Set loading state for a node"""
-        self.loading_states.set_state(node, segment_key, state)
+        self.loading_states.set_state(node.node_id, segment_key, state)
 
     def add_endpoint(self, node: PageNode):
-        partial_endpoint = partial(node.endpoint, **self.path_vars)
+        partial_endpoint = partial(node.endpoint, **self.variables)
         self.endpoints[node.node_id] = partial_endpoint
     
     def get_node_by_segment_key(self, segment_key: str) -> Optional[PageNode]:
@@ -63,8 +67,8 @@ class RoutingContext:
     
     def should_lazy_load(self, node: PageNode, var: Optional[str] = None) -> bool:
         """Check if node should be lazy loaded"""
-        state = self.get_node_state(node, var)
         segment_key = node.create_segment_key(var)
+        state = self.get_node_state(segment_key)
         return (
             state != "lacy" and 
             node.loading is not None and 
