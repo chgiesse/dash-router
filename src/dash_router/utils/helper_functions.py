@@ -292,21 +292,32 @@ def extract_function_inputs(func):
         'Component'  # Base component type
     }
     
+    print(f"\nExtracting inputs from {func.__name__ if hasattr(func, '__name__') else 'anonymous function'}")
+    
     for param_name, type_hint in type_hints.items():
         # Skip if the type is a route component
         if str(type_hint) in route_components:
+            print(f"  Skipping route component: {param_name}: {type_hint}")
             continue
             
         inputs.add(param_name)
         input_types[param_name] = type_hint
+        print(f"  Found input: {param_name}: {type_hint}")
         
         # Handle Pydantic models
         origin = get_origin(type_hint)
-        if not origin and issubclass(type_hint, BaseModel):
-            fields = type_hint.model_fields
-            for field_name, field in fields.items():
-                inputs.add(field_name)
-                input_types[field_name] = field.annotation
+        if not origin:
+            try:
+                # Handle both actual classes and forward references
+                if isinstance(type_hint, type) and issubclass(type_hint, BaseModel):
+                    fields = type_hint.model_fields
+                    for field_name, field in fields.items():
+                        inputs.add(field_name)
+                        input_types[field_name] = field.annotation
+                        print(f"    Found model field: {field_name}: {field.annotation}")
+            except (TypeError, AttributeError) as e:
+                print(f"    Skipping type hint {type_hint}: {str(e)}")
+                pass
                 
     return inputs, input_types
 
@@ -324,6 +335,8 @@ def merge_function_inputs(*functions):
     all_inputs = set()
     all_types = {}
     
+    print("\nMerging function inputs:")
+    
     for func in functions:
         if not func:
             continue
@@ -333,6 +346,7 @@ def merge_function_inputs(*functions):
         inputs, types = extract_function_inputs(func)
         
         if is_layout:
+            print(f"\nFiltering route components from layout function: {func.__name__}")
             # Filter out route components from layout function
             route_components = {
                 'ChildContainer',
@@ -341,8 +355,16 @@ def merge_function_inputs(*functions):
                 'LacyContainer',
                 'Component'
             }
-            inputs = {name for name in inputs if str(types.get(name, '')) not in route_components}
-            types = {name: type_ for name, type_ in types.items() if str(type_) not in route_components}
+            # Safely check type strings
+            inputs = {
+                name for name in inputs 
+                if not any(comp in str(types.get(name, '')) for comp in route_components)
+            }
+            types = {
+                name: type_ for name, type_ in types.items() 
+                if not any(comp in str(type_) for comp in route_components)
+            }
+            print(f"  Remaining inputs after filtering: {inputs}")
         
         all_inputs.update(inputs)
         
@@ -350,7 +372,11 @@ def merge_function_inputs(*functions):
         for input_name, input_type in types.items():
             if input_name not in all_types:
                 all_types[input_name] = input_type
+                print(f"  Added type for {input_name}: {input_type}")
+            else:
+                print(f"  Skipping duplicate type for {input_name}")
                 
+    print(f"\nFinal merged inputs: {all_inputs}")
     return all_inputs, all_types
 
 

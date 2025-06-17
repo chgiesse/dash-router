@@ -1,4 +1,3 @@
-from dash_router.core import loading_state
 from ..utils.helper_functions import create_pathtemplate_key, _invoke_layout
 from ..components import ChildContainer, LacyContainer, SlotContainer
 
@@ -9,6 +8,8 @@ import asyncio
 
 from dash import html
 from dash.development.base_component import Component
+from pydantic import BaseModel
+from pydantic import create_model
 
 
 LoadingStateType = Literal["lacy", "done", "hidden"] | None
@@ -36,10 +37,17 @@ class ExecNode:
         Executes the node by rendering its layout with the provided variables,
         slots, and views.
         """
-        data = endpoint_results.get(self.node_id)
+        from .routing import RouteTable
+        from .context import RoutingContext
+        from datetime import date, datetime
 
+        data = endpoint_results.get(self.node_id)
+        node = RouteTable.get_node(self.node_id)
+        
         if self.is_lacy:
-            loading_layout = await _invoke_layout(self.loading, **self.variables)
+            # Get validated variables for loading state
+            validated_vars = RoutingContext.get_validated_variables(node, self.variables)
+            loading_layout = await _invoke_layout(self.loading, **validated_vars)
             return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
         if isinstance(data, Exception):
@@ -50,20 +58,52 @@ class ExecNode:
             self._handle_child(is_init, endpoint_results),
         )
 
+        # Combine all variables and content
         all_kwargs = {**self.variables, **slots_content, **views_content, "data": data}
-
-        try:
-            layout = await _invoke_layout(self.layout, **all_kwargs)
-        except Exception as e:
-            layout = await self.handle_error(e, self.variables)
+        
+        # If layout is a callable, validate inputs for model parameters
+        if callable(self.layout):
+            try:
+                # Get the function's signature
+                import inspect
+                sig = inspect.signature(self.layout)
+                
+                # Create a new kwargs dict with validated values for model parameters
+                final_kwargs = {}
+                for param_name, param in sig.parameters.items():
+                    if param_name in all_kwargs:
+                        # Get the parameter type
+                        param_type = param.annotation
+                        
+                        # Handle Pydantic models
+                        if isinstance(param_type, type) and issubclass(param_type, BaseModel):
+                            # Pass all kwargs to the model constructor
+                            final_kwargs[param_name] = param_type(**all_kwargs)
+                        # Handle all other types
+                        else:
+                            # Use pydantic's validation for complex types
+                            temp_model = create_model('TempModel', **{param_name: (param_type, ...)})
+                            validated = temp_model(**{param_name: all_kwargs[param_name]})
+                            final_kwargs[param_name] = getattr(validated, param_name)
+                
+                layout = await _invoke_layout(self.layout, **final_kwargs)
+            except Exception as e:
+                layout = await self.handle_error(e, self.variables)
+        else:
+            layout = self.layout
 
         return layout
 
     async def handle_error(self, error: Exception, variables: Dict[str, any]):
+        from .routing import RouteTable
+        from .context import RoutingContext
+        
         if not self.error:
             return html.Div(str(error), className="banner")
 
-        error_layout = await _invoke_layout(self.error, error, **variables)
+        node = RouteTable.get_node(self.node_id)
+        validated_vars = RoutingContext.get_validated_variables(node, variables)
+        error_layout = await _invoke_layout(self.error, error, **validated_vars)
         return error_layout
 
     async def _handle_slots(

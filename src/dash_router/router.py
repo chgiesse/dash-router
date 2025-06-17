@@ -1,3 +1,4 @@
+from ast import TypeVarTuple
 from functools import partial
 import importlib
 import json
@@ -135,7 +136,19 @@ class Router:
         endpoint = self.import_route_component(current_dir, "api.py", "endpoint")
         
         # Merge inputs from layout and endpoint
+        print("Merging inputs from layout and endpoint", segment, flush=True)
         inputs, input_types = merge_function_inputs(page_layout, endpoint)
+        
+        # Filter out Dash Router components from input types
+        dash_router_components = (ChildContainer, LacyContainer, RootContainer, SlotContainer)
+        
+        filtered_input_types = {}
+        for name, type_ in input_types.items():
+            print(f"{segment}  Input type: {name}: {type_}", flush=True)
+            # Skip Dash Router components
+            if isinstance(type_, type) and issubclass(type_, dash_router_components):
+                continue
+            filtered_input_types[name] = type_
         
         node_id = str(uuid4())
         new_node = PageNode(
@@ -149,7 +162,7 @@ class Router:
             loading=loading_layout,
             endpoint=endpoint,
             endpoint_inputs=list(inputs),
-            input_types=input_types,
+            input_types=filtered_input_types,
             path=relative_path,
             is_static=is_static,
             default_child=route_config.default_child,

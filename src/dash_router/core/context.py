@@ -9,6 +9,7 @@ from .loading_state import LoadingStates, LoadingState
 from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
 from .routing import PageNode, RouteTable
 from pydantic import BaseModel
+from datetime import date, datetime
 
 
 @dataclass
@@ -23,31 +24,79 @@ class RoutingContext:
     is_init: bool = True
     segments: List[str] = field(default_factory=list)
 
+    def validate_and_parse_inputs(self, node: PageNode, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate and parse inputs for a specific node.
+        Handles:
+        - Pydantic models by passing all inputs to the model constructor
+        - Simple types (str, int, float, etc.)
+        - Complex types (List, Optional, Literal, etc.)
+        """
+        if not node or not node.input_types:
+            return inputs
+
+        print(f"\nValidating inputs for node {node.module}:")
+        validated_inputs = {}
+        
+        for var_name, var_type in node.input_types.items():
+            if var_name in inputs:
+                try:
+                    # Handle Pydantic models
+                    if isinstance(var_type, type) and issubclass(var_type, BaseModel):
+                        print(f"  Validating Pydantic model {var_name}: {var_type}")
+                        validated_inputs[var_name] = var_type(**inputs)
+                    # Handle all other types
+                    else:
+                        print(f"  Validating type {var_name}: {var_type}")
+                        # Use pydantic's validation for complex types
+                        from pydantic import create_model
+                        temp_model = create_model('TempModel', **{var_name: (var_type, ...)})
+                        validated = temp_model(**{var_name: inputs[var_name]})
+                        validated_inputs[var_name] = getattr(validated, var_name)
+                except Exception as e:
+                    print(f"  Error validating {var_name}: {e}")
+                    validated_inputs[var_name] = inputs[var_name]
+            else:
+                print(f"  Missing input {var_name}: {var_type}")
+                
+        return validated_inputs
+
     @property
     def variables(self):
         """Get all variables with type validation and parsing"""
         all_vars = {**self.query_params, **self.path_vars}
-        validated_vars = {}
+        return all_vars
+
+    @classmethod
+    def get_validated_variables(cls, node: PageNode, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get validated variables for a specific node.
+        Used during lazy loading and URL resolution.
+        """
+        if not node or not node.input_types:
+            return inputs
+
+        print(f"\nValidating inputs for node {node.module}:")
+        validated_inputs = {}
         
-        for node_id, node in self.endpoints.items():
-            node_obj = RouteTable.get_node(node_id)
-            if not node_obj or not node_obj.input_types:
-                continue
+        for var_name, var_type in node.input_types.items():
+            if var_name in inputs:
+                try:
+                    # Handle Pydantic models
+                    if isinstance(var_type, type) and issubclass(var_type, BaseModel):
+                        print(f"  Validating Pydantic model {var_name}: {var_type}")
+                        validated_inputs[var_name] = var_type.model_validate(inputs[var_name])
+                    else:
+                        # Handle basic types
+                        print(f"  Validating basic type {var_name}: {var_type}")
+                        validated_inputs[var_name] = var_type(inputs[var_name])
+                except Exception as e:
+                    print(f"  Error validating {var_name}: {e}")
+                    validated_inputs[var_name] = inputs[var_name]
+            else:
+                print(f"  Missing input {var_name}: {var_type}")
                 
-            for var_name, var_type in node_obj.input_types.items():
-                if var_name in all_vars:
-                    try:
-                        # Handle Pydantic models
-                        if isinstance(var_type, type) and issubclass(var_type, BaseModel):
-                            validated_vars[var_name] = var_type.model_validate(all_vars[var_name])
-                        else:
-                            # Handle basic types
-                            validated_vars[var_name] = var_type(all_vars[var_name])
-                    except Exception as e:
-                        print(f"Error validating {var_name}: {e}")
-                        validated_vars[var_name] = all_vars[var_name]
-                        
-        return validated_vars
+        return validated_inputs
 
     @classmethod
     def from_request(
