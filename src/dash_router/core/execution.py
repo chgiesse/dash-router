@@ -82,7 +82,7 @@ class ExecNode:
         for slot_name, slot_layout in zip(self.slots.keys(), views):
             clean_slot_name = slot_name.strip("()")
             results[clean_slot_name] = SlotContainer(
-                slot_layout, self.segment, slot_name
+                slot_layout, self.node_id, slot_name
             )
 
         return results

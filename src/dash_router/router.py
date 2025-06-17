@@ -338,18 +338,72 @@ class Router:
         ctx: RoutingContext = RoutingContext.from_request(
             pathname=path,
             loading_state_dict=loading_state,
-            is_init=False,
+            is_init=True,
             query_params=query_params
         )
 
-        eligable_nodes = []
+        # Collect all eligible nodes (nodes whose endpoint inputs match updated query parameters)
+        eligible_nodes = []
         for segment_key, loaded_node in ctx.loading_states._states.items():
             node_id = loaded_node.node_id
             node = RouteTable.get_node(node_id)
             if any(node_input in updated_query_parameters for node_input in node.endpoint_inputs):
-                eligable_nodes.append(node)
+                eligible_nodes.append(node)
 
-        print(eligable_nodes, flush=True)
+        if not eligible_nodes:
+            return 
+
+        # Find parent nodes and create a set of nodes to process
+        nodes_to_process_ids = set()
+        for node in eligible_nodes:
+            current = node
+            while current:
+                # If we find a parent that needs to be processed, add it and stop traversing
+                if any(parent_input in updated_query_parameters for parent_input in current.endpoint_inputs):
+                    nodes_to_process_ids.add(current.node_id)
+                    break
+                current = RouteTable.get_node(current.parent_id) if current.parent_id else None
+
+        # If no parent nodes need processing, process the eligible nodes directly
+        if not nodes_to_process_ids:
+            nodes_to_process_ids = {node.node_id for node in eligible_nodes}
+
+        # Build execution trees for all selected nodes
+        exec_trees = []
+        nodes_to_process = []
+        for node_id in nodes_to_process_ids:
+            node = RouteTable.get_node(node_id)
+            exec_tree = self.build_execution_tree(
+                current_node=node,
+                ctx=ctx,
+                is_init=False,
+            )
+            if exec_tree:
+                exec_trees.append(exec_tree)
+                nodes_to_process.append(node)
+
+        # Gather all endpoints once
+        endpoint_results = await ctx.gather_endpoints()
+
+        # Execute all trees with the same endpoint results
+        layouts = []
+        nodes = []
+        for exec_tree, node in zip(exec_trees, nodes_to_process):
+            layout = await exec_tree.execute(
+                is_init=False, 
+                endpoint_results=endpoint_results
+            )
+            if layout:
+                layouts.append(layout)
+                nodes.append(node)
+
+        new_loading_state = {
+            **loading_state,
+            **ctx.loading_states.to_dict(),
+            "query_params": query_params,
+        }
+
+        return self.build_multi_response(nodes, new_loading_state, layouts)
 
     @staticmethod
     async def gather_endpoints(endpoints: Dict[UUID, Callable[..., Awaitable[any]]]):
@@ -382,11 +436,23 @@ class Router:
                 container_id = json.dumps(ChildContainer.ids.container(node.parent_id))
 
         rendered_layout = recursive_to_plotly_json(layout)
-
         response = {
             container_id: {"children": rendered_layout},
             RootContainer.ids.state_store: {"data": loading_state},
         }
+        return RouterResponse(multi=True, response=response)
+
+    def build_multi_response(self, nodes: List[PageNode], loading_state, layouts: List[Component]) -> RouterResponse:
+        """Builds a response containing multiple layout updates with a single state store."""
+        if not nodes or not layouts:
+            return self.build_response(None, {})
+
+        response = {RootContainer.ids.state_store: {"data": loading_state}}
+        
+        for node, layout in zip(nodes, layouts):
+            single_response = self.build_response(node, loading_state, layout)
+            response.update(single_response.response)
+
         return RouterResponse(multi=True, response=response)
 
     # ─── ASYNC & SYNC ROUTER SETUP ───────────────────────────────────────────────────
@@ -444,13 +510,8 @@ class Router:
                     if key not in self.app.routing_callback_inputs
                 }
                 updates = dict(updated.items() | missing.items())
-                print("query_parameters", query_parameters, flush=True)
-                print("previous_qp", previous_qp, flush=True)
-                print("updated", updated, flush=True)
-                print("missing_keys", missing_keys, flush=True)
-                print("missing", missing, flush=True)
-                print("updates", updates, flush=True)
-                await self.resolve_search(pathname_, varibales, updates, loading_state_)
+                response = await self.resolve_search(pathname_, varibales, updates, loading_state_)
+                return response.model_dump() if response else response
 
         @self.app.server.before_serving
         async def trigger_router():
@@ -523,6 +584,8 @@ class Router:
                 key: val if val.get("state") != "lacy" else {**val, "state": "done"}
                 for key, val in loading_state.items()
             }
+
+            new_loading_state["query_params"] = query_parameters
 
             if layout:
                 set_props(RootContainer.ids.state_store, {"data": new_loading_state})
