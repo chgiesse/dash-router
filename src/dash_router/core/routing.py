@@ -47,7 +47,8 @@ class PageNode(BaseModel):
     loading: Optional[Callable[..., Awaitable[Component]] | Component] = None
     error: Optional[Callable[..., Awaitable[Component]] | Component] = None
     endpoint: Optional[Callable[..., Awaitable[Any]]] = None
-    endpoint_inputs: Optional[List[Any]] = None
+    endpoint_inputs: Optional[List[str]] = None
+    input_types: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
     class Config:
         arbitrary_types_allowed = True

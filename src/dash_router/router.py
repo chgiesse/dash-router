@@ -27,6 +27,7 @@ from .utils.helper_functions import (
     extract_function_inputs,
     format_relative_path,
     _invoke_layout,
+    merge_function_inputs,
 )
 from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
 from .models import RouterResponse, LoadingStateType
@@ -132,8 +133,10 @@ class Router:
         )
 
         endpoint = self.import_route_component(current_dir, "api.py", "endpoint")
-        endpoint_inputs = extract_function_inputs(endpoint) if endpoint else []
-
+        
+        # Merge inputs from layout and endpoint
+        inputs, input_types = merge_function_inputs(page_layout, endpoint)
+        
         node_id = str(uuid4())
         new_node = PageNode(
             _segment=segment,
@@ -145,7 +148,8 @@ class Router:
             error=error_layout,
             loading=loading_layout,
             endpoint=endpoint,
-            endpoint_inputs=endpoint_inputs,
+            endpoint_inputs=list(inputs),
+            input_types=input_types,
             path=relative_path,
             is_static=is_static,
             default_child=route_config.default_child,

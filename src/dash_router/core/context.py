@@ -7,7 +7,8 @@ from uuid import UUID
 
 from .loading_state import LoadingStates, LoadingState
 from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
-from .routing import PageNode
+from .routing import PageNode, RouteTable
+from pydantic import BaseModel
 
 
 @dataclass
@@ -24,7 +25,29 @@ class RoutingContext:
 
     @property
     def variables(self):
-        return {**self.query_params, **self.path_vars}
+        """Get all variables with type validation and parsing"""
+        all_vars = {**self.query_params, **self.path_vars}
+        validated_vars = {}
+        
+        for node_id, node in self.endpoints.items():
+            node_obj = RouteTable.get_node(node_id)
+            if not node_obj or not node_obj.input_types:
+                continue
+                
+            for var_name, var_type in node_obj.input_types.items():
+                if var_name in all_vars:
+                    try:
+                        # Handle Pydantic models
+                        if isinstance(var_type, type) and issubclass(var_type, BaseModel):
+                            validated_vars[var_name] = var_type.model_validate(all_vars[var_name])
+                        else:
+                            # Handle basic types
+                            validated_vars[var_name] = var_type(all_vars[var_name])
+                    except Exception as e:
+                        print(f"Error validating {var_name}: {e}")
+                        validated_vars[var_name] = all_vars[var_name]
+                        
+        return validated_vars
 
     @classmethod
     def from_request(

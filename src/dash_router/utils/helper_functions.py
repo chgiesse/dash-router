@@ -267,16 +267,91 @@ def create_segment_key(page_node, variables):
 
 
 def extract_function_inputs(func):
+    """
+    Extract input parameters and their types from a function.
+    Handles both regular parameters and Pydantic models.
+    Ignores route components (ChildContainer, SlotContainer, RootContainer, LacyContainer).
+    
+    Returns:
+    --------
+    tuple: (set of input names, dict of input types)
+    """
+    if not func:
+        return set(), {}
+        
     type_hints = get_type_hints(func)
-    inputs = []
+    inputs = set()
+    input_types = {}
+    
+    # List of route component types to ignore
+    route_components = {
+        'ChildContainer',
+        'SlotContainer',
+        'RootContainer',
+        'LacyContainer',
+        'Component'  # Base component type
+    }
+    
     for param_name, type_hint in type_hints.items():
+        # Skip if the type is a route component
+        if str(type_hint) in route_components:
+            continue
+            
+        inputs.add(param_name)
+        input_types[param_name] = type_hint
+        
+        # Handle Pydantic models
         origin = get_origin(type_hint)
-        inputs.append(param_name)
-        print(param_name, type_hint, flush=True)
         if not origin and issubclass(type_hint, BaseModel):
             fields = type_hint.model_fields
-            inputs += list(fields.keys())
-    return set(inputs)
+            for field_name, field in fields.items():
+                inputs.add(field_name)
+                input_types[field_name] = field.annotation
+                
+    return inputs, input_types
+
+
+def merge_function_inputs(*functions):
+    """
+    Merge inputs from multiple functions, combining their parameter names and types.
+    Handles type conflicts by preferring the first occurrence of a parameter.
+    Ignores route components in layout functions.
+    
+    Returns:
+    --------
+    tuple: (set of merged input names, dict of merged input types)
+    """
+    all_inputs = set()
+    all_types = {}
+    
+    for func in functions:
+        if not func:
+            continue
+            
+        # For layout functions, we want to ignore route components
+        is_layout = hasattr(func, '__name__') and func.__name__ == 'layout'
+        inputs, types = extract_function_inputs(func)
+        
+        if is_layout:
+            # Filter out route components from layout function
+            route_components = {
+                'ChildContainer',
+                'SlotContainer',
+                'RootContainer',
+                'LacyContainer',
+                'Component'
+            }
+            inputs = {name for name in inputs if str(types.get(name, '')) not in route_components}
+            types = {name: type_ for name, type_ in types.items() if str(type_) not in route_components}
+        
+        all_inputs.update(inputs)
+        
+        # Only add types for inputs we haven't seen before
+        for input_name, input_type in types.items():
+            if input_name not in all_types:
+                all_types[input_name] = input_type
+                
+    return all_inputs, all_types
 
 
 def _parse_path_variables(pathname, path_template):
