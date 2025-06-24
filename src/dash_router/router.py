@@ -1,4 +1,3 @@
-from functools import partial
 import importlib
 import json
 import os
@@ -23,8 +22,6 @@ from .utils.helper_functions import (
     format_relative_path,
     path_to_module,
     recursive_to_plotly_json,
-    create_segment_key,
-    extract_function_inputs,
     format_relative_path,
     _invoke_layout,
 )
@@ -32,6 +29,7 @@ from .components import ChildContainer, LacyContainer, RootContainer, SlotContai
 from .models import RouterResponse, LoadingStateType
 from .core.routing import PageNode, RouteConfig, RouteTable, RouteTree
 from .core.execution import ExecNode
+from .core.query_params import extract_function_inputs
 
 
 class Router:
@@ -104,7 +102,7 @@ class Router:
             if entry.startswith((".", "_")) or entry == "page.py":
                 continue
 
-            full_path = os.path.join(current_dir, entry)
+            full_path = os.path.join(current_dir, entry)    
             if os.path.isdir(full_path):
                 self._traverse_directory(current_dir, entry, next_node)
 
@@ -132,7 +130,9 @@ class Router:
         )
 
         endpoint = self.import_route_component(current_dir, "api.py", "endpoint")
-        endpoint_inputs = extract_function_inputs(endpoint) if endpoint else []
+        endpoint_inputs, end_types = extract_function_inputs(endpoint)
+        layout_inputs, inp_types = extract_function_inputs(page_layout)
+        inputs = set(endpoint_inputs + layout_inputs)
 
         node_id = str(uuid4())
         new_node = PageNode(
@@ -145,7 +145,7 @@ class Router:
             error=error_layout,
             loading=loading_layout,
             endpoint=endpoint,
-            endpoint_inputs=endpoint_inputs,
+            endpoint_inputs=inputs,
             path=relative_path,
             is_static=is_static,
             default_child=route_config.default_child,

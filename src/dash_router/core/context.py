@@ -7,7 +7,7 @@ from uuid import UUID
 
 from .loading_state import LoadingStates, LoadingState
 from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
-from .routing import PageNode
+from .routing import PageNode, RouteTable
 
 
 @dataclass
@@ -65,8 +65,6 @@ class RoutingContext:
         """Get node by segment key using loading states"""
         node_id = self.loading_states.get_node_id(segment_key)
         if node_id:
-            from .routing import RouteTable
-
             return RouteTable.get_node(node_id)
         return None
 
@@ -129,3 +127,18 @@ class RoutingContext:
     def to_loading_state_dict(self) -> Dict[str, Any]:
         """Convert context back to loading state dict for response"""
         return {**self.loading_states.to_dict(), "query_params": self.query_params}
+
+    def set_children_loading_states(self, node: PageNode, state: str = "done"):
+        """
+        Mark all descendant nodes (children, slots, path templates) as 'done' 
+        since they are not part of the current rendering cycle.
+        
+        This ensures that previously loaded content stays visible while only 
+        returning updated states via to_dict().
+        """
+
+        for slot_name, slot_id in node.slots.items():
+            slot_node = RouteTable.get_node(slot_id)
+            if slot_node:
+                self.set_node_state(slot_node, state, slot_name)
+                self.set_children_loading_states(slot_node, state)

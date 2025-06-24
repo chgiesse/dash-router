@@ -249,36 +249,6 @@ def to_json_plotly(plotly_object, pretty=False, engine=None):
         return cleaned
 
 
-def create_segment_key(page_node, variables):
-    segment_key = page_node.segment
-
-    if page_node.is_path_template:
-        path_key = page_node.segment
-        path_variable = (
-            variables.get(path_key) or DEFAULT_LAYOUT_TOKEN
-            if page_node.is_slot
-            else None
-        )
-        segment_key = create_pathtemplate_key(
-            page_node.segment, page_node.path_template, path_variable, path_key
-        )
-
-    return segment_key
-
-
-def extract_function_inputs(func):
-    type_hints = get_type_hints(func)
-    inputs = []
-    for param_name, type_hint in type_hints.items():
-        origin = get_origin(type_hint)
-        inputs.append(param_name)
-        print(param_name, type_hint, flush=True)
-        if not origin and issubclass(type_hint, BaseModel):
-            fields = type_hint.model_fields
-            inputs += list(fields.keys())
-    return set(inputs)
-
-
 def _parse_path_variables(pathname, path_template):
     """
     creates the dict of path variables passed to the layout

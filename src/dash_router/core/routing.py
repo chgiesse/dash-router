@@ -11,7 +11,6 @@ from typing import (
     Optional,
     ClassVar,
     Tuple,
-    TYPE_CHECKING,
 )
 from dash.development.base_component import Component
 from dash._utils import AttributeDict
@@ -183,7 +182,7 @@ class RouteTree:
 
             if node_id := cls._dynamic_routes.routes.get(segment):
                 node = RouteTable.get_node(node_id)
-                ctx.segments.pop(0)
+                ctx.segments.pop(0) if ctx.segments else None
                 return node
 
             if node_id := cls._dynamic_routes.path_template:
@@ -192,7 +191,7 @@ class RouteTree:
                 return node
 
             missed_segments = segment
-            ctx.segments.pop(0)
+            ctx.segments.pop(0) if ctx.segments else None
 
         return node
 
@@ -222,6 +221,7 @@ class RouteTree:
                 next_segment = ctx.peek_segment()
 
             ctx.set_node_state(active_node, "done", segment_key)
+            ctx.set_children_loading_states(active_node, "done")
 
             if child_node := active_node.get_child_node(next_segment):
                 if not child_node.is_path_template:
