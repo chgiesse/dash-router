@@ -7,16 +7,15 @@ from uuid import UUID
 
 from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
 from .routing import PageNode, RouteTable
-from dash_router.models import LoadingStateType
 from pydantic import BaseModel
 
 
 class LoadingState(BaseModel):
-    state: LoadingStateType
+    state: Literal["lacy", "done", "hidden"]
     node_id: str
     updated: bool = False
 
-    def update_state(self, state: LoadingStateType) -> None:
+    def update_state(self, state: Literal["lacy", "done", "hidden"]) -> None:
         self.state = state
         self.updated = True
 

@@ -1,6 +1,5 @@
-from ..models import LoadingStateType
 from ..utils.helper_functions import _parse_path_variables
-from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
+from ..utils.constants import DEFAULT_LAYOUT_TOKEN
 
 from typing import (
     Any,
@@ -28,6 +27,15 @@ class RouteConfig(BaseModel):
     image: str | None = None
     image_url: str | None = None
     redirect_from: List[str] | None = None
+
+
+class RouterResponse(BaseModel):
+    response: Dict[str, any]
+    mimetype: str = "application/json"
+    multi: bool = False
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 class PageNode(BaseModel):

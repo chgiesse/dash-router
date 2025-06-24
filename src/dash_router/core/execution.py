@@ -1,8 +1,9 @@
+from click import Option
 from ..utils.helper_functions import _invoke_layout
 from ..components import ChildContainer, LacyContainer, SlotContainer
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Awaitable
+from typing import Callable, Dict, Awaitable, Optional
 from uuid import UUID
 import asyncio
 
@@ -20,9 +21,9 @@ class ExecNode:
     layout: Callable[..., Awaitable[Component]] | Component
     variables: Dict[str, str] = field(default_factory=dict)
     slots: Dict[str, "ExecNode"] = field(default_factory=dict)
-    child_node: Dict[str, "ExecNode"] = field(default_factory=dict)
-    loading: Callable | Component | None = None
-    error: Callable | Component | None = None
+    child_node: Optional["ExecNode"] = "default"
+    loading: Optional[Callable | Component] = None
+    error: Optional[Callable | Component] = None
     is_lacy: bool = False
 
     async def execute(self, endpoint_results: Dict[UUID, Dict[any, any]]) -> Component:
@@ -83,13 +84,13 @@ class ExecNode:
         self, endpoint_results: Dict[UUID, Dict[any, any]]
     ) -> Dict[str, Component]:
         """Executes the current view node."""
-        if not self.child_node:
+        if self.child_node == "default":
             return {}
 
-        _, child_node = next(iter(self.child_node.items()))
-        layout = await child_node.execute(endpoint_results) if child_node else None
+        layout = await self.child_node.execute(endpoint_results) if self.child_node else None
+
         return {
             "children": ChildContainer(
-                layout, self.node_id, child_node.segment if child_node else None
+                layout, self.node_id, self.child_node.segment if self.child_node else None
             )
         }

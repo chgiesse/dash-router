@@ -25,8 +25,7 @@ from .utils.helper_functions import (
     _invoke_layout,
 )
 from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
-from .models import RouterResponse, LoadingStateType
-from .core.routing import PageNode, RouteConfig, RouteTable, RouteTree
+from .core.routing import PageNode, RouteConfig, RouteTable, RouteTree, RouterResponse
 from .core.execution import ExecNode
 from .core.query_params import extract_function_inputs
 
@@ -234,7 +233,7 @@ class Router:
                 ctx=ctx,
             )
 
-            exec_node.child_node["children"] = child_exec
+            exec_node.child_node = child_exec
 
         if current_node.slots:
             exec_node.slots = self._process_slot_nodes(
@@ -271,7 +270,7 @@ class Router:
         self,
         pathname: str,
         query_parameters: Dict[str, any],
-        loading_state: LoadingStateType,
+        loading_state: Dict[str, any],
     ) -> RouterResponse:
 
         path = self.strip_relative_path(pathname)
@@ -323,7 +322,7 @@ class Router:
         pathname: str,
         query_params: Dict[str, any],
         updated_query_parameters: Dict[str, any],
-        loading_state: LoadingStateType,
+        loading_state: Dict[str, any],
     ) -> RouterResponse:
 
         path = self.strip_relative_path(pathname)
@@ -461,7 +460,7 @@ class Router:
         if not nodes or not layouts:
             return self.build_response(None, {})
 
-        response = {}  # RootContainer.ids.state_store: {"data": loading_state}
+        response = {}
 
         for node, layout in zip(nodes, layouts):
             single_response = self.build_response(node, loading_state, layout)
@@ -590,14 +589,4 @@ class Router:
             endpoint_results = await ctx.gather_endpoints()
             layout = await exec_tree.execute(endpoint_results)
 
-            # loading_state = {**loading_state, **ctx.loading_states.to_dict()}
-            # new_loading_state = {
-            #     key: val if val.get("state") != "lacy" else {**val, "state": "done"}
-            #     for key, val in loading_state.items()
-            # }
-
-            # new_loading_state["query_params"] = query_parameters
-
-            # if layout:
-            #     set_props(RootContainer.ids.state_store, {"data": new_loading_state})
             return layout
