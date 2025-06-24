@@ -20,7 +20,6 @@ class RoutingContext:
     resolve_type: Literal["search", "url", "lacy"]
     path_vars: Dict[str, str] = field(default_factory=dict)
     endpoints: Dict[UUID, Callable] = field(default_factory=dict)
-    is_init: bool = True
     segments: List[str] = field(default_factory=list)
 
     @property
@@ -34,7 +33,6 @@ class RoutingContext:
         query_params: Dict[str, Any],
         loading_state_dict: Dict[str, Dict],
         resolve_type: Literal["search", "url", "lacy"],
-        is_init: bool = True,
     ) -> "RoutingContext":
         """Create context from request data"""
         loading_states = LoadingStates(loading_state_dict)
@@ -45,9 +43,8 @@ class RoutingContext:
             pathname=pathname,
             query_params=query_params,
             loading_states=loading_states,
-            is_init=is_init,
             segments=segments,
-            resolve_type=resolve_type
+            resolve_type=resolve_type,
         )
 
     def get_node_state(self, segment_key: Optional[str] = None) -> Optional[str]:
@@ -71,11 +68,13 @@ class RoutingContext:
             return RouteTable.get_node(node_id)
         return None
 
-    def should_lazy_load(self, node: PageNode, segment_key: Optional[str] = None) -> bool:
+    def should_lazy_load(
+        self, node: PageNode, segment_key: Optional[str] = None
+    ) -> bool:
         """Check if node should be lazy loaded"""
         return (
             node.loading is not None
-            and self.resolve_type == "url"
+            and self.resolve_type != "lacy"
             and DEFAULT_LAYOUT_TOKEN not in segment_key
         )
 
@@ -129,13 +128,7 @@ class RoutingContext:
         return {**self.loading_states.to_dict(), "query_params": self.query_params}
 
     def set_silent_loading_states(self, node: PageNode, state: str = "done"):
-        """
-        Mark all descendant nodes (children, slots, path templates) as 'done' 
-        since they are not part of the current rendering cycle.
-        
-        This ensures that previously loaded content stays visible while only 
-        returning updated states via to_dict().
-        """
+        """Mark all descendant slots as done"""
         for slot_name, slot_id in node.slots.items():
             slot_node = RouteTable.get_node(slot_id)
             if slot_node:

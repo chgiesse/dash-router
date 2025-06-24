@@ -1,7 +1,6 @@
 import importlib
 import json
 import os
-from re import L
 import traceback
 from typing import Any, Awaitable, Callable, Dict, List, Literal, Tuple
 from uuid import UUID, uuid4
@@ -102,7 +101,7 @@ class Router:
             if entry.startswith((".", "_")) or entry == "page.py":
                 continue
 
-            full_path = os.path.join(current_dir, entry)    
+            full_path = os.path.join(current_dir, entry)
             if os.path.isdir(full_path):
                 self._traverse_directory(current_dir, entry, next_node)
 
@@ -189,7 +188,6 @@ class Router:
         self,
         current_node: PageNode,
         ctx: RoutingContext,
-        is_init: bool,
     ) -> ExecNode:
         """
         Recursively builds the execution tree for the matched route.
@@ -234,7 +232,6 @@ class Router:
             child_exec = self.build_execution_tree(
                 current_node=child_node,
                 ctx=ctx,
-                is_init=is_init,
             )
 
             exec_node.child_node["children"] = child_exec
@@ -243,7 +240,6 @@ class Router:
             exec_node.slots = self._process_slot_nodes(
                 current_node=current_node,
                 ctx=ctx,
-                is_init=is_init,
             )
 
         ctx.set_node_state(current_node, "done", segment_key)
@@ -253,7 +249,6 @@ class Router:
         self,
         current_node: PageNode,
         ctx: RoutingContext,
-        is_init: bool = True,
     ) -> Dict[str, ExecNode]:
         """Processes all slot nodes defined on the current node."""
         slot_exec_nodes: Dict[str, ExecNode] = {}
@@ -265,7 +260,6 @@ class Router:
             slot_exec_node = self.build_execution_tree(
                 current_node=slot_node,
                 ctx=ctx,
-                is_init=is_init,
             )
 
             slot_exec_nodes[slot_name] = slot_exec_node
@@ -278,7 +272,6 @@ class Router:
         pathname: str,
         query_parameters: Dict[str, any],
         loading_state: LoadingStateType,
-        is_init: bool = True,
     ) -> RouterResponse:
 
         path = self.strip_relative_path(pathname)
@@ -286,7 +279,6 @@ class Router:
             pathname=path,
             query_params=query_parameters,
             loading_state_dict=loading_state,
-            is_init=is_init,
             resolve_type="url",
         )
 
@@ -307,14 +299,13 @@ class Router:
         exec_tree = self.build_execution_tree(
             current_node=active_node,
             ctx=ctx,
-            is_init=is_init,
         )
 
         if not exec_tree:
             return self.build_response(node=None, loading_state={})
-
+    
         result_data = await ctx.gather_endpoints()
-        final_layout = await exec_tree.execute(result_data, is_init)
+        final_layout = await exec_tree.execute(result_data)
 
         new_loading_state = {
             **ctx.loading_states.to_dict(),
@@ -339,9 +330,8 @@ class Router:
         ctx = RoutingContext.from_request(
             pathname=path,
             loading_state_dict=loading_state,
-            is_init=True,
             query_params=query_params,
-            resolve_type="search"
+            resolve_type="search",
         )
 
         # Collect all eligible nodes (nodes whose endpoint inputs match updated query parameters)
@@ -349,11 +339,14 @@ class Router:
         for segment_key, loaded_node in ctx.loading_states._states.items():
             node_id = loaded_node.node_id
             node = RouteTable.get_node(node_id)
-            if any(node_input in updated_query_parameters for node_input in node.endpoint_inputs):
+            if any(
+                node_input in updated_query_parameters
+                for node_input in node.endpoint_inputs
+            ):
                 eligible_nodes.append(node)
 
         if not eligible_nodes:
-            return 
+            return
 
         # Find parent nodes and create a set of nodes to process
         nodes_to_process_ids = set()
@@ -361,10 +354,17 @@ class Router:
             current = node
             while current:
                 # If we find a parent that needs to be processed, add it and stop traversing
-                if any(parent_input in updated_query_parameters for parent_input in current.endpoint_inputs):
+                if any(
+                    parent_input in updated_query_parameters
+                    for parent_input in current.endpoint_inputs
+                ):
                     nodes_to_process_ids.add(current.node_id)
                     break
-                current = RouteTable.get_node(current.parent_id) if current.parent_id else None
+                current = (
+                    RouteTable.get_node(current.parent_id)
+                    if current.parent_id
+                    else None
+                )
 
         # If no parent nodes need processing, process the eligible nodes directly
         if not nodes_to_process_ids:
@@ -378,7 +378,6 @@ class Router:
             exec_tree = self.build_execution_tree(
                 current_node=node,
                 ctx=ctx,
-                is_init=False,
             )
             if exec_tree:
                 exec_trees.append(exec_tree)
@@ -391,10 +390,7 @@ class Router:
         layouts = []
         nodes = []
         for exec_tree, node in zip(exec_trees, nodes_to_process):
-            layout = await exec_tree.execute(
-                is_init=False, 
-                endpoint_results=endpoint_results
-            )
+            layout = await exec_tree.execute(endpoint_results)
             if layout:
                 layouts.append(layout)
                 nodes.append(node)
@@ -419,7 +415,13 @@ class Router:
         )
         return dict(zip(keys, results))
 
-    def build_response(self, node: PageNode, loading_state, layout: Component = None):
+    def build_response(
+        self,
+        node: PageNode,
+        loading_state,
+        layout: Component = None,
+        remove_layout: bool = False,
+    ):
         match node:
             case None:
                 container_id = RootContainer.ids.container
@@ -427,7 +429,11 @@ class Router:
                 loading_state = {}
 
             case _ if node.is_root or node.is_static:
-                container_id = RootContainer.ids.container
+                container_id = (
+                    RootContainer.ids.container
+                    if not remove_layout
+                    else json.dumps(ChildContainer.ids.container(node.node_id))
+                )
 
             case _ if node.is_slot:
                 container_id = json.dumps(
@@ -435,8 +441,12 @@ class Router:
                 )
 
             case _:
-                container_id = json.dumps(ChildContainer.ids.container(node.parent_id))
-
+                container_id = json.dumps(
+                    ChildContainer.ids.container(
+                        node.parent_id if not remove_layout else node.node_id
+                    )
+                )
+        print(container_id, flush=True)
         rendered_layout = recursive_to_plotly_json(layout)
         response = {
             container_id: {"children": rendered_layout},
@@ -444,13 +454,15 @@ class Router:
         }
         return RouterResponse(multi=True, response=response)
 
-    def build_multi_response(self, nodes: List[PageNode], loading_state, layouts: List[Component]) -> RouterResponse:
+    def build_multi_response(
+        self, nodes: List[PageNode], loading_state, layouts: List[Component]
+    ) -> RouterResponse:
         """Builds a response containing multiple layout updates with a single state store."""
         if not nodes or not layouts:
             return self.build_response(None, {})
 
-        response = {} # RootContainer.ids.state_store: {"data": loading_state}
-        
+        response = {}  # RootContainer.ids.state_store: {"data": loading_state}
+
         for node, layout in zip(nodes, layouts):
             single_response = self.build_response(node, loading_state, layout)
             response.update(single_response.response)
@@ -487,9 +499,7 @@ class Router:
             pathname_, search_, loading_state_, states_ = args
             query_parameters = _parse_query_string(search_)
             previous_qp = loading_state_.pop("query_params", {})
-            _, func_kwargs = validate_and_group_input_args(
-                args, inputs_state_indices
-            )
+            _, func_kwargs = validate_and_group_input_args(args, inputs_state_indices)
             func_kwargs = dict(list(func_kwargs.items())[3:])
             varibales = {**query_parameters, **func_kwargs}
 
@@ -512,7 +522,9 @@ class Router:
                     if key not in self.app.routing_callback_inputs
                 }
                 updates = dict(updated.items() | missing.items())
-                response = await self.resolve_search(pathname_, varibales, updates, loading_state_)
+                response = await self.resolve_search(
+                    pathname_, varibales, updates, loading_state_
+                )
                 return response.model_dump() if response else response
 
         @self.app.server.before_serving
@@ -565,8 +577,7 @@ class Router:
                 pathname=pathname,
                 query_params=variables,
                 loading_state_dict=loading_state,
-                is_init=False,
-                resolve_type="lacy"
+                resolve_type="lacy",
             )
 
             ctx.segments = remaining_segments
@@ -574,13 +585,10 @@ class Router:
             exec_tree = self.build_execution_tree(
                 current_node=lacy_node,
                 ctx=ctx,
-                is_init=False,
             )
 
             endpoint_results = await ctx.gather_endpoints()
-            layout = await exec_tree.execute(
-                is_init=False, endpoint_results=endpoint_results
-            )
+            layout = await exec_tree.execute(endpoint_results)
 
             # loading_state = {**loading_state, **ctx.loading_states.to_dict()}
             # new_loading_state = {

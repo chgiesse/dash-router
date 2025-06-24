@@ -30,7 +30,7 @@ class ExecNode:
     is_lacy: bool = False
 
     async def execute(
-        self, endpoint_results: Dict[UUID, Dict[any, any]], is_init: bool = True
+        self, endpoint_results: Dict[UUID, Dict[any, any]]
     ) -> Component:
         """
         Executes the node by rendering its layout with the provided variables,
@@ -46,8 +46,8 @@ class ExecNode:
             return await self.handle_error(data, self.variables)
 
         slots_content, views_content = await asyncio.gather(
-            self._handle_slots(is_init, endpoint_results),
-            self._handle_child(is_init, endpoint_results),
+            self._handle_slots(endpoint_results),
+            self._handle_child(endpoint_results),
         )
 
         all_kwargs = {**self.variables, **slots_content, **views_content, "data": data}
@@ -67,14 +67,14 @@ class ExecNode:
         return error_layout
 
     async def _handle_slots(
-        self, is_init: bool, endpoint_results: Dict[UUID, Dict[any, any]]
+        self, endpoint_results: Dict[UUID, Dict[any, any]]
     ) -> Dict[str, Component]:
         """Executes all slot nodes and gathers their rendered components."""
         if not self.slots:
             return {}
 
         executables = [
-            slot.execute(endpoint_results, is_init) for slot in self.slots.values()
+            slot.execute(endpoint_results) for slot in self.slots.values()
         ]
         views = await asyncio.gather(*executables)
         results = {}
@@ -88,7 +88,7 @@ class ExecNode:
         return results
 
     async def _handle_child(
-        self, is_init: bool, endpoint_results: Dict[UUID, Dict[any, any]]
+        self, endpoint_results: Dict[UUID, Dict[any, any]]
     ) -> Dict[str, Component]:
         """Executes the current view node."""
         if not self.child_node:
@@ -96,7 +96,7 @@ class ExecNode:
 
         _, child_node = next(iter(self.child_node.items()))
         layout = (
-            await child_node.execute(endpoint_results, is_init) if child_node else None
+            await child_node.execute(endpoint_results) if child_node else None
         )
         return {
             "children": ChildContainer(
