@@ -201,7 +201,7 @@ class Router:
 
         next_segment = ctx.peek_segment()
         segment_key = current_node.create_segment_key(next_segment)
-        is_lacy = ctx.should_lazy_load(current_node, next_segment)
+        is_lacy = ctx.should_lazy_load(current_node, segment_key)
 
         if current_node.is_path_template:
             ctx.consume_path_var(current_node)
@@ -219,7 +219,7 @@ class Router:
         )
 
         if is_lacy:
-            ctx.set_node_state(current_node, "lacy", segment_key)
+            ctx.set_node_state(current_node, "done", segment_key)
             return exec_node
 
         if current_node.endpoint and not DEFAULT_LAYOUT_TOKEN in segment_key:
@@ -287,6 +287,7 @@ class Router:
             query_params=query_parameters,
             loading_state_dict=loading_state,
             is_init=is_init,
+            resolve_type="url",
         )
 
         static_route, path_variables = RouteTree.get_static_route(ctx)
@@ -335,11 +336,12 @@ class Router:
     ) -> RouterResponse:
 
         path = self.strip_relative_path(pathname)
-        ctx: RoutingContext = RoutingContext.from_request(
+        ctx = RoutingContext.from_request(
             pathname=path,
             loading_state_dict=loading_state,
             is_init=True,
-            query_params=query_params
+            query_params=query_params,
+            resolve_type="search"
         )
 
         # Collect all eligible nodes (nodes whose endpoint inputs match updated query parameters)
@@ -447,7 +449,7 @@ class Router:
         if not nodes or not layouts:
             return self.build_response(None, {})
 
-        response = {RootContainer.ids.state_store: {"data": loading_state}}
+        response = {} # RootContainer.ids.state_store: {"data": loading_state}
         
         for node, layout in zip(nodes, layouts):
             single_response = self.build_response(node, loading_state, layout)
@@ -564,6 +566,7 @@ class Router:
                 query_params=variables,
                 loading_state_dict=loading_state,
                 is_init=False,
+                resolve_type="lacy"
             )
 
             ctx.segments = remaining_segments
@@ -579,14 +582,14 @@ class Router:
                 is_init=False, endpoint_results=endpoint_results
             )
 
-            loading_state = {**loading_state, **ctx.loading_states.to_dict()}
-            new_loading_state = {
-                key: val if val.get("state") != "lacy" else {**val, "state": "done"}
-                for key, val in loading_state.items()
-            }
+            # loading_state = {**loading_state, **ctx.loading_states.to_dict()}
+            # new_loading_state = {
+            #     key: val if val.get("state") != "lacy" else {**val, "state": "done"}
+            #     for key, val in loading_state.items()
+            # }
 
-            new_loading_state["query_params"] = query_parameters
+            # new_loading_state["query_params"] = query_parameters
 
-            if layout:
-                set_props(RootContainer.ids.state_store, {"data": new_loading_state})
+            # if layout:
+            #     set_props(RootContainer.ids.state_store, {"data": new_loading_state})
             return layout

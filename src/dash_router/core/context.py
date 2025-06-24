@@ -2,7 +2,7 @@ from ast import Call
 import asyncio
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 from uuid import UUID
 
 from .loading_state import LoadingStates, LoadingState
@@ -17,6 +17,7 @@ class RoutingContext:
     pathname: str
     query_params: Dict[str, Any]
     loading_states: LoadingStates
+    resolve_type: Literal["search", "url", "lacy"]
     path_vars: Dict[str, str] = field(default_factory=dict)
     endpoints: Dict[UUID, Callable] = field(default_factory=dict)
     is_init: bool = True
@@ -32,6 +33,7 @@ class RoutingContext:
         pathname: str,
         query_params: Dict[str, Any],
         loading_state_dict: Dict[str, Dict],
+        resolve_type: Literal["search", "url", "lacy"],
         is_init: bool = True,
     ) -> "RoutingContext":
         """Create context from request data"""
@@ -45,6 +47,7 @@ class RoutingContext:
             loading_states=loading_states,
             is_init=is_init,
             segments=segments,
+            resolve_type=resolve_type
         )
 
     def get_node_state(self, segment_key: Optional[str] = None) -> Optional[str]:
@@ -68,14 +71,11 @@ class RoutingContext:
             return RouteTable.get_node(node_id)
         return None
 
-    def should_lazy_load(self, node: PageNode, var: Optional[str] = None) -> bool:
+    def should_lazy_load(self, node: PageNode, segment_key: Optional[str] = None) -> bool:
         """Check if node should be lazy loaded"""
-        segment_key = node.create_segment_key(var)
-        state = self.get_node_state(segment_key)
         return (
-            state != "lacy"
-            and node.loading is not None
-            and self.is_init
+            node.loading is not None
+            and self.resolve_type == "url"
             and DEFAULT_LAYOUT_TOKEN not in segment_key
         )
 
@@ -128,7 +128,7 @@ class RoutingContext:
         """Convert context back to loading state dict for response"""
         return {**self.loading_states.to_dict(), "query_params": self.query_params}
 
-    def set_children_loading_states(self, node: PageNode, state: str = "done"):
+    def set_silent_loading_states(self, node: PageNode, state: str = "done"):
         """
         Mark all descendant nodes (children, slots, path templates) as 'done' 
         since they are not part of the current rendering cycle.
@@ -136,9 +136,8 @@ class RoutingContext:
         This ensures that previously loaded content stays visible while only 
         returning updated states via to_dict().
         """
-
         for slot_name, slot_id in node.slots.items():
             slot_node = RouteTable.get_node(slot_id)
             if slot_node:
                 self.set_node_state(slot_node, state, slot_name)
-                self.set_children_loading_states(slot_node, state)
+                self.set_silent_loading_states(slot_node, state)

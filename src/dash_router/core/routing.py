@@ -209,7 +209,7 @@ class RouteTree:
             segment_key = active_node.create_segment_key(next_segment)
             segment_loading_state = ctx.get_node_state(segment_key)
 
-            if not segment_loading_state or segment_loading_state == "lacy":
+            if not segment_loading_state:
                 return active_node
 
             if active_node.is_path_template:
@@ -221,7 +221,7 @@ class RouteTree:
                 next_segment = ctx.peek_segment()
 
             ctx.set_node_state(active_node, "done", segment_key)
-            ctx.set_children_loading_states(active_node, "done")
+            ctx.set_silent_loading_states(active_node, "done")
 
             if child_node := active_node.get_child_node(next_segment):
                 if not child_node.is_path_template:
