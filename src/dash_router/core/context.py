@@ -2,12 +2,23 @@ from ast import Call
 import asyncio
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+from typing import Any, Callable, Dict, List, Literal, Optional
 from uuid import UUID
 
-from .loading_state import LoadingStates, LoadingState
 from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
 from .routing import PageNode, RouteTable
+from dash_router.models import LoadingStateType
+from pydantic import BaseModel
+
+
+class LoadingState(BaseModel):
+    state: LoadingStateType
+    node_id: str
+    updated: bool = False
+
+    def update_state(self, state: LoadingStateType) -> None:
+        self.state = state
+        self.updated = True
 
 
 @dataclass
@@ -16,11 +27,11 @@ class RoutingContext:
 
     pathname: str
     query_params: Dict[str, Any]
-    loading_states: LoadingStates
     resolve_type: Literal["search", "url", "lacy"]
     path_vars: Dict[str, str] = field(default_factory=dict)
     endpoints: Dict[UUID, Callable] = field(default_factory=dict)
     segments: List[str] = field(default_factory=list)
+    _loading_states: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @property
     def variables(self):
@@ -35,38 +46,42 @@ class RoutingContext:
         resolve_type: Literal["search", "url", "lacy"],
     ) -> "RoutingContext":
         """Create context from request data"""
-        loading_states = LoadingStates(loading_state_dict)
         path = pathname.strip("/")
         segments = [seg for seg in path.split("/") if seg] if path else []
-
+        # Build _loading_states dict
+        _loading_states = {
+            segment_key: LoadingState(**ils)
+            for segment_key, ils in loading_state_dict.items()
+        }
         return cls(
             pathname=pathname,
             query_params=query_params,
-            loading_states=loading_states,
             segments=segments,
             resolve_type=resolve_type,
+            _loading_states=_loading_states,
         )
 
     def get_node_state(self, segment_key: Optional[str] = None) -> Optional[str]:
         """Get loading state for a node"""
-        return self.loading_states.get_state(segment_key)
+        ls = self._loading_states.get(segment_key)
+        if ls:
+            return ls.state
+        return None
 
     def set_node_state(
         self, node: PageNode, state: str, segment_key: Optional[str] = None
     ):
         """Set loading state for a node"""
-        self.loading_states.set_state(node.node_id, segment_key, state)
+        if segment_key not in self._loading_states:
+            self._loading_states[segment_key] = LoadingState(
+                state=state, node_id=node.node_id, updated=True
+            )
+        else:
+            self._loading_states[segment_key].update_state(state)
 
     def add_endpoint(self, node: PageNode):
         partial_endpoint = partial(node.endpoint, **self.variables)
         self.endpoints[node.node_id] = partial_endpoint
-
-    def get_node_by_segment_key(self, segment_key: str) -> Optional[PageNode]:
-        """Get node by segment key using loading states"""
-        node_id = self.loading_states.get_node_id(segment_key)
-        if node_id:
-            return RouteTable.get_node(node_id)
-        return None
 
     def should_lazy_load(
         self, node: PageNode, segment_key: Optional[str] = None
@@ -125,7 +140,15 @@ class RoutingContext:
 
     def to_loading_state_dict(self) -> Dict[str, Any]:
         """Convert context back to loading state dict for response"""
-        return {**self.loading_states.to_dict(), "query_params": self.query_params}
+        return {**self.get_updated_loading_state(), "query_params": self.query_params}
+
+    def get_updated_loading_state(self) -> Dict[str, Dict]:
+        """Return only updated loading states as a dict."""
+        return {
+            key: {"state": state.state, "node_id": state.node_id}
+            for key, state in self._loading_states.items()
+            if state.updated == True
+        }
 
     def set_silent_loading_states(self, node: PageNode, state: str = "done"):
         """Mark all descendant slots as done"""

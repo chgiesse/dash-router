@@ -1,12 +1,8 @@
 from asyncio import iscoroutinefunction
-from inspect import iscoroutine
-from .constants import DEFAULT_LAYOUT_TOKEN
 
 import os
 from _plotly_utils.optional_imports import get_module
 from plotly.io._json import clean_to_json_compatible, config, JsonConfig
-from typing import get_type_hints, get_origin
-from pydantic import BaseModel
 from fnmatch import fnmatch
 import re
 
@@ -19,16 +15,6 @@ async def _invoke_layout(func, *func_args, **func_kwargs):
         return func(*func_args, **func_kwargs)
 
     return func
-
-
-def create_pathtemplate_key(
-    segment: str, path_template: str, path_variable: str, template_key: str
-):
-    if path_variable and path_template:
-        filled_template = path_template.replace(template_key, path_variable)
-        path_template_key = segment + filled_template
-        return path_template_key
-    return segment
 
 
 def recursive_to_plotly_json(component):
@@ -137,15 +123,6 @@ def recursive_to_plotly_json(component):
 
 def format_relative_path(path: str):
     return path.replace(".", "/").replace("_", "-").replace(" ", "-")
-
-
-def format_segment(segment: str, is_slot: bool = False):
-    if is_slot:
-        formatted_segment = segment.strip("()")
-    else:
-        formatted_segment = segment.replace("_", "-").replace(" ", "-")
-
-    return formatted_segment
 
 
 def path_to_module(current_dir: str, module: str):

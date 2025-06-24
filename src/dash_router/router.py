@@ -2,7 +2,7 @@ import importlib
 import json
 import os
 import traceback
-from typing import Any, Awaitable, Callable, Dict, List, Literal, Tuple
+from typing import Awaitable, Callable, Dict, List, Literal
 from uuid import UUID, uuid4
 
 from dash import html
@@ -11,12 +11,12 @@ from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
 from dash_router.core.context import RoutingContext
-from flash import Flash, Input, Output, State, MATCH, set_props
+from flash import Flash, Input, Output, State, MATCH
 from flash._pages import _parse_query_string
 from quart import request
 import asyncio
 
-from .utils.constants import REST_TOKEN, DEFAULT_LAYOUT_TOKEN
+from .utils.constants import DEFAULT_LAYOUT_TOKEN
 from .utils.helper_functions import (
     format_relative_path,
     path_to_module,
@@ -303,12 +303,12 @@ class Router:
 
         if not exec_tree:
             return self.build_response(node=None, loading_state={})
-    
+
         result_data = await ctx.gather_endpoints()
         final_layout = await exec_tree.execute(result_data)
 
         new_loading_state = {
-            **ctx.loading_states.to_dict(),
+            **ctx.get_updated_loading_state(),
             "query_params": query_parameters,
         }
 
@@ -336,7 +336,7 @@ class Router:
 
         # Collect all eligible nodes (nodes whose endpoint inputs match updated query parameters)
         eligible_nodes = []
-        for segment_key, loaded_node in ctx.loading_states._states.items():
+        for _, loaded_node in ctx._loading_states.items():
             node_id = loaded_node.node_id
             node = RouteTable.get_node(node_id)
             if any(
@@ -397,7 +397,7 @@ class Router:
 
         new_loading_state = {
             **loading_state,
-            **ctx.loading_states.to_dict(),
+            **ctx.get_updated_loading_state(),
             "query_params": query_params,
         }
 
@@ -446,7 +446,7 @@ class Router:
                         node.parent_id if not remove_layout else node.node_id
                     )
                 )
-        print(container_id, flush=True)
+
         rendered_layout = recursive_to_plotly_json(layout)
         response = {
             container_id: {"children": rendered_layout},
