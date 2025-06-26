@@ -402,18 +402,6 @@ class Router:
 
         return self.build_multi_response(nodes, new_loading_state, layouts)
 
-    @staticmethod
-    async def gather_endpoints(endpoints: Dict[UUID, Callable[..., Awaitable[any]]]):
-        if not endpoints:
-            return {}
-
-        keys = list(endpoints.keys())
-        funcs = list(endpoints.values())
-        results = await asyncio.gather(
-            *[func() for func in funcs], return_exceptions=True
-        )
-        return dict(zip(keys, results))
-
     def build_response(
         self,
         node: PageNode,
