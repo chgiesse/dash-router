@@ -6,7 +6,6 @@ from typing import (
     Callable,
     Dict,
     List,
-    Awaitable,
     Optional,
     ClassVar,
     Tuple,
@@ -30,7 +29,7 @@ class RouteConfig(BaseModel):
 
 
 class RouterResponse(BaseModel):
-    response: Dict[str, any]
+    response: Dict[Any, Any]
     mimetype: str = "application/json"
     multi: bool = False
 
@@ -41,7 +40,7 @@ class RouterResponse(BaseModel):
 class PageNode(BaseModel):
     segment_value: str = Field(alias="_segment")  # Changed to use alias
     node_id: str
-    layout: Callable[..., Awaitable[Component]] | Component
+    layout: Callable[..., Component] | Component
     module: str
     parent_id: Optional[str] = None
     path: Optional[str] = None
@@ -51,9 +50,9 @@ class PageNode(BaseModel):
     child_nodes: Dict[str, UUID] = Field(default_factory=dict)
     slots: Dict[str, str] = Field(default_factory=dict)
     path_template: Optional[str] = None
-    loading: Optional[Callable[..., Awaitable[Component]] | Component] = None
-    error: Optional[Callable[..., Awaitable[Component]] | Component] = None
-    endpoint: Optional[Callable[..., Awaitable[Any]]] = None
+    loading: Optional[Callable[..., Component] | Component] = None
+    error: Optional[Callable[..., Component] | Component] = None
+    endpoint: Optional[Callable[..., Any]] = None
     endpoint_inputs: Optional[List[Any]] = None
 
     class Config:
@@ -211,7 +210,7 @@ class RouteTree:
         while ctx.segments:
 
             if active_node is None:
-                return active_node, None
+                return active_node
 
             next_segment = ctx.peek_segment()
             segment_key = active_node.create_segment_key(next_segment)

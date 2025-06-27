@@ -211,7 +211,7 @@ class RouteTree:
         while ctx.segments:
 
             if active_node is None:
-                return active_node, None
+                return active_node
 
             next_segment = ctx.peek_segment()
             segment_key = active_node.create_segment_key(next_segment)

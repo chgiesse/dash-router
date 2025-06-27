@@ -1,5 +1,5 @@
 import json
-from typing import Dict
+from typing import Any, Dict
 
 from dash import dcc, html
 from dash.development.base_component import Component
@@ -91,7 +91,7 @@ class LacyContainer(html.Div):
             "type": "dash-router-lacy-component",
         }
 
-    def __init__(self, children: Component, node_id: str, variables: Dict[str, any]):
+    def __init__(self, children: Component, node_id: str, variables: Dict[str, Any]):
         data_prop = {"data-path": json.dumps(variables)}
 
         super().__init__(

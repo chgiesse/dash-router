@@ -1,20 +1,20 @@
+from ast import arg
 import importlib
 import json
 import os
 import traceback
-from typing import Awaitable, Callable, Dict, List, Literal
+from typing import Any, Callable, Dict, List, Literal
 from uuid import UUID, uuid4
 
-from dash import html
+from dash import html, dcc, Input, Output, State, MATCH, callback
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
 from dash_router.core.context import RoutingContext
-from flash import Flash, Input, Output, State, MATCH
-from flash._pages import _parse_query_string
-from quart import request
-import asyncio
+from dash import Dash
+from dash._pages import _parse_query_string
+from flask import request
 
 from .utils.constants import DEFAULT_LAYOUT_TOKEN
 from .utils.helper_functions import (
@@ -33,7 +33,7 @@ from .core.query_params import extract_function_inputs
 class Router:
     def __init__(
         self,
-        app: Flash,
+        app: Dash,
         pages_folder: str = "pages",
         requests_pathname_prefix: str | None = None,
         ignore_empty_folders: bool = False,
@@ -44,10 +44,10 @@ class Router:
         self.route_table = {}
         self.requests_pathname_prefix = requests_pathname_prefix
         self.ignore_empty_folders = ignore_empty_folders
-        self.pages_folder = app.pages_folder if app.pages_folder else pages_folder
+        self.pages_folder = pages_folder
 
-        if not isinstance(self.app, Flash):
-            raise TypeError(f"App needs to be of Flash not: {type(self.app)}")
+        if not isinstance(self.app, Dash):
+            raise TypeError(f"App needs to be of Dash not: {type(self.app)}")
 
         self.setup_route_tree()
         self.setup_router()
@@ -266,11 +266,11 @@ class Router:
         return slot_exec_nodes
 
     # ─── RESPONSE BUILDER ─────────────────────────────────────
-    async def resolve_url(
+    def resolve_url(
         self,
         pathname: str,
-        query_parameters: Dict[str, any],
-        loading_state: Dict[str, any],
+        query_parameters: Dict[str, Any],
+        loading_state: Dict[str, Any],
     ) -> RouterResponse:
 
         path = self.strip_relative_path(pathname)
@@ -283,7 +283,7 @@ class Router:
 
         static_route, path_variables = RouteTree.get_static_route(ctx)
         if static_route:
-            layout = await _invoke_layout(
+            layout = _invoke_layout(
                 static_route.layout, **query_parameters, **path_variables
             )
             return self.build_response(
@@ -303,8 +303,8 @@ class Router:
         if not exec_tree:
             return self.build_response(node=None, loading_state={})
 
-        result_data = await ctx.gather_endpoints()
-        final_layout = await exec_tree.execute(result_data)
+        result_data = ctx.gather_endpoints()
+        final_layout = exec_tree.execute(result_data)
 
         new_loading_state = {
             **ctx.get_updated_loading_state(),
@@ -317,7 +317,7 @@ class Router:
 
         return response
 
-    async def resolve_search(
+    def resolve_search(
         self,
         pathname: str,
         query_params: Dict[str, any],
@@ -383,13 +383,13 @@ class Router:
                 nodes_to_process.append(node)
 
         # Gather all endpoints once
-        endpoint_results = await ctx.gather_endpoints()
+        endpoint_results = ctx.gather_endpoints()
 
         # Execute all trees with the same endpoint results
         layouts = []
         nodes = []
         for exec_tree, node in zip(exec_trees, nodes_to_process):
-            layout = await exec_tree.execute(endpoint_results)
+            layout = exec_tree.execute(endpoint_results)
             if layout:
                 layouts.append(layout)
                 nodes.append(node)
@@ -403,15 +403,13 @@ class Router:
         return self.build_multi_response(nodes, new_loading_state, layouts)
 
     @staticmethod
-    async def gather_endpoints(endpoints: Dict[UUID, Callable[..., Awaitable[any]]]):
+    def gather_endpoints(endpoints: Dict[UUID, Callable[..., Any]]):
         if not endpoints:
             return {}
 
         keys = list(endpoints.keys())
         funcs = list(endpoints.values())
-        results = await asyncio.gather(
-            *[func() for func in funcs], return_exceptions=True
-        )
+        results = [func() for func in funcs]
         return dict(zip(keys, results))
 
     def build_response(
@@ -468,11 +466,11 @@ class Router:
 
         return RouterResponse(multi=True, response=response)
 
-    # ─── ASYNC & SYNC ROUTER SETUP ───────────────────────────────────────────────────
+    # ─── SYNCHRONOUS ROUTER SETUP ───────────────────────────────────────────────────
     def setup_router(self) -> None:
         @self.app.server.before_request
-        async def router():
-            request_data = await request.get_data()
+        def router():
+            request_data = request.get_data()
             if not request_data:
                 return
 
@@ -494,7 +492,9 @@ class Router:
             state = body.get("state", [])
             cb_data = self.app.callback_map[output]
             inputs_state_indices = cb_data["inputs_state_indices"]
+            print("inputs_state_indices: ", inputs_state_indices, flush=True)
             args = inputs_to_vals(inputs + state)
+            print("ARGS: ", args, flush=True)
             pathname_, search_, loading_state_, states_ = args
             query_parameters = _parse_query_string(search_)
             previous_qp = loading_state_.pop("query_params", {})
@@ -504,7 +504,7 @@ class Router:
 
             if prop == "pathname":
                 try:
-                    response = await self.resolve_url(
+                    response = self.resolve_url(
                         pathname_, varibales, loading_state_
                     )
                     return response.model_dump()
@@ -521,13 +521,12 @@ class Router:
                     if key not in self.app.routing_callback_inputs
                 }
                 updates = dict(updated.items() | missing.items())
-                response = await self.resolve_search(
+                response = self.resolve_search(
                     pathname_, varibales, updates, loading_state_
                 )
                 return response.model_dump() if response else response
 
-        @self.app.server.before_serving
-        async def trigger_router():
+        with self.app.server.app_context():
             inputs = dict(
                 pathname_=Input(RootContainer.ids.location, "pathname"),
                 search_=Input(RootContainer.ids.location, "search"),
@@ -539,7 +538,7 @@ class Router:
                 Output(RootContainer.ids.dummy, "children"),
                 inputs=inputs,
             )
-            async def update(
+            def update(
                 pathname_: str, search_: str, loading_state_: str, **states
             ):
                 pass
@@ -556,7 +555,7 @@ class Router:
         @self.app.callback(
             Output(LacyContainer.ids.container(MATCH), "children"), inputs=inputs
         )
-        async def load_lacy_component(
+        def load_lacy_component(
             lacy_segment_id, variables, pathname, search, loading_state
         ):
             node_id = lacy_segment_id.get("index")
@@ -586,7 +585,7 @@ class Router:
                 ctx=ctx,
             )
 
-            endpoint_results = await ctx.gather_endpoints()
-            layout = await exec_tree.execute(endpoint_results)
+            endpoint_results = ctx.gather_endpoints()
+            layout = exec_tree.execute(endpoint_results)
 
             return layout

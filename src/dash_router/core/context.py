@@ -1,5 +1,3 @@
-from ast import Call
-import asyncio
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any, Callable, Dict, List, Literal, Optional
@@ -126,15 +124,19 @@ class RoutingContext:
         combined = f"{first}/{second}"
         self.segments.append(combined)
 
-    async def gather_endpoints(self):
+    def gather_endpoints(self):
         if not self.endpoints:
             return {}
 
         keys = list(self.endpoints.keys())
         funcs = list(self.endpoints.values())
-        results = await asyncio.gather(
-            *[func() for func in funcs], return_exceptions=True
-        )
+        results = []
+        for func in funcs:
+            try:
+                result = func()
+                results.append(result)
+            except Exception as e:
+                results.append(e)
         return dict(zip(keys, results))
 
     def to_loading_state_dict(self) -> Dict[str, Any]:
