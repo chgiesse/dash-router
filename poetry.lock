@@ -347,13 +347,13 @@ testing = ["beautifulsoup4 (>=4.8.2)", "cryptography", "dash-testing-stub (>=0.0
 
 [[package]]
 name = "dash-flash"
-version = "0.1.2rc1"
+version = "1.0.1"
 description = "Flash - async port of the Dash framework"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "dash_flash-0.1.2rc1.tar.gz", hash = "sha256:bde0f6861b171962af045e6186223cb07912c042f7e3e6a0dbb801865497cc9c"},
+    {file = "dash_flash-1.0.1.tar.gz", hash = "sha256:3dfb423a63188ea751cc03ed561e3499b6d710099acbe703918e676d40885ec1"},
 ]
 
 [package.dependencies]
@@ -363,7 +363,7 @@ quart-compress = ">=0.2.1,<0.3.0"
 
 [package.source]
 type = "file"
-url = "../../flash/flash-package/dist/dash_flash-0.1.2rc1.tar.gz"
+url = "../../flash/flash-package/dist/dash_flash-1.0.1.tar.gz"
 
 [[package]]
 name = "flask"
@@ -1013,7 +1013,10 @@ enabler = ["pytest-enabler (>=2.2)"]
 test = ["big-O", "importlib-resources ; python_version < \"3.9\"", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more-itertools", "pytest (>=6,!=8.1.*)", "pytest-ignore-flaky"]
 type = ["pytest-mypy"]
 
+[extras]
+async = ["dash-flash"]
+
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "66b4a07f98d7f1fb829cc6b1943b967f60a438410d59b72ce1ab98c0d5999429"
+content-hash = "980900ab14fee28ed666801867d0e2fff9da76b2aa8a10e895b6ba94feadaaca"

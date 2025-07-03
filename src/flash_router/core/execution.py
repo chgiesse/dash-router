@@ -3,7 +3,7 @@ from ..utils.helper_functions import _invoke_layout
 from ..components import ChildContainer, LacyContainer, SlotContainer
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Awaitable, Optional
+from typing import Any, Callable, Dict, Awaitable, Optional
 from uuid import UUID
 import asyncio
 
@@ -54,7 +54,7 @@ class ExecNode:
 
         return layout
 
-    async def handle_error(self, error: Exception, variables: Dict[str, any]):
+    async def handle_error(self, error: Exception, variables: Dict[str, Any]):
         if not self.error:
             return html.Div(str(error), className="banner")
 
@@ -62,7 +62,7 @@ class ExecNode:
         return error_layout
 
     async def _handle_slots(
-        self, endpoint_results: Dict[UUID, Dict[any, any]]
+        self, endpoint_results: Dict[UUID, Dict[Any, Any]]
     ) -> Dict[str, Component]:
         """Executes all slot nodes and gathers their rendered components."""
         if not self.slots:
@@ -81,7 +81,7 @@ class ExecNode:
         return results
 
     async def _handle_child(
-        self, endpoint_results: Dict[UUID, Dict[any, any]]
+        self, endpoint_results: Dict[UUID, Dict[Any, Any]]
     ) -> Dict[str, Component]:
         """Executes the current view node."""
         if self.child_node == "default":

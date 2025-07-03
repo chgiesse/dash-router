@@ -10,7 +10,6 @@ from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
-from dash_router.core.context import RoutingContext
 from flash import Flash, Input, Output, State, MATCH
 from flash._pages import _parse_query_string
 from quart import request
@@ -24,10 +23,12 @@ from .utils.helper_functions import (
     format_relative_path,
     _invoke_layout,
 )
+
 from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
 from .core.routing import PageNode, RouteConfig, RouteTable, RouteTree, RouterResponse
-from .core.execution import ExecNode
 from .core.query_params import extract_function_inputs
+from .core.context import RoutingContext
+from .core.execution import ExecNode
 
 
 class Router:
