@@ -2,8 +2,10 @@ import importlib
 import json
 import os
 import traceback
+import sys
 from typing import Awaitable, Callable, Dict, List, Literal
 from uuid import UUID, uuid4
+from pathlib import Path
 
 from dash import html
 from dash._get_paths import app_strip_relative_path
@@ -11,7 +13,7 @@ from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
 from flash import Flash, Input, Output, State, MATCH
-from flash._pages import _parse_query_string
+from flash._pages import _parse_query_string, _infer_module_name
 from quart import request
 import asyncio
 
@@ -56,8 +58,19 @@ class Router:
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
-        root_dir = ".".join(self.app.server.name.split(os.sep)[:-1])
-        self._traverse_directory(root_dir, self.pages_folder, None)
+        # root_dir = ".".join(self.app.server.name.split(os.sep)[:-1])
+
+        pages_path = Path(self.app.config.pages_folder)
+        app_dir = pages_path.parent
+
+        if not pages_path.exists():
+            raise FileNotFoundError(
+                f"Pages folder not found at: {pages_path}\n"
+                f"Current working directory: {Path.cwd()}\n"
+                f"Current working directory: {self.pages_folder}\n"
+            )
+
+        self._traverse_directory(str(app_dir), self.pages_folder, None)
 
     def _validate_node(self, node: PageNode):
         # Validate Slots
@@ -109,7 +122,7 @@ class Router:
         self, current_dir: str, segment: str, parent_node: PageNode
     ) -> PageNode | None:
         """Load modules and create Page Node"""
-        relative_path = os.path.relpath(current_dir, self.pages_folder)
+        relative_path = os.path.relpath(current_dir, self.app.config.pages_folder)
         relative_path = format_relative_path(relative_path)
         page_module_name = path_to_module(current_dir, "page.py")
         parent_node_id = parent_node.node_id if parent_node else None
@@ -161,10 +174,19 @@ class Router:
         file_name: Literal["page.py", "error.py", "loading.py", "api.py"],
         component_name: Literal["layout", "config", "endpoint"] = "layout",
     ) -> Callable[..., Component] | Component | None:
-        page_module_name = path_to_module(current_dir, file_name)
+        # page_module_name = path_to_module(current_dir, file_name)
+        page_path = os.path.join(current_dir, file_name)
+        page_module_name = _infer_module_name(page_path)
+
         try:
-            page_module = importlib.import_module(page_module_name)
-            layout = getattr(page_module, component_name, None)
+            spec = importlib.util.spec_from_file_location(page_module_name, page_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            layout = getattr(module, component_name, None)
+
+            if page_module_name not in sys.modules:
+                sys.modules[page_module_name] = module            
+
             if file_name == "page.py" and not layout:
                 raise ImportError(
                     f"Module {page_module_name} needs a layout function or component"
@@ -172,7 +194,7 @@ class Router:
             return layout
 
         except ImportError as e:
-            if file_name == "layout.py":
+            if file_name == "page.py":
                 print(f"Error processing {page_module_name}: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
                 raise ImportError(
