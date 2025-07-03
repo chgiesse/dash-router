@@ -1,21 +1,25 @@
 [tool.poetry]
-name = "flash-router"
-version = "0.3.0-beta.2"
+name = "flash_router"
+version = "0.3.0-beta.5"
 description = "File-system based router for Dash and Flash applications."
 authors = ["chgiesse"]
 repository = "https://github.com/chgiesse/dash-router"
 license = "MIT"
 readme = "README.md"
 packages = [
-  { include = "dash_router", from = "src" }
+    { include = "dash_router", from = "src" },
+    { include = "flash_router", from = "src" }
 ]
 
 [tool.poetry.dependencies]
 python = "^3.12"
 pydantic = "^2.10.4"
 dash = "^3.0.0rc1"
-dash-flash = "<=1.0.0"
+# Only Flash is optional - needed for flash_router package
+dash-flash = {path = "/Users/cgiessel/Documents/projects/flash/flash-package/dist/dash_flash-1.0.1.tar.gz"}
 
+[tool.poetry.extras]
+async = ["dash-flash"]
 
 [build-system]
 requires = ["poetry-core"]

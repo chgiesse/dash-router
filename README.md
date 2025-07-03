@@ -10,11 +10,11 @@ All routes are dynamic by default and have to be set static manually. Static rou
 
 This segmentation not only makes your codebase easier to manage but also enhances performance through subrendering, parallel execution, and individualized error and loading handling.
 
-![routing](route_tree.png)
+![routing](animated_router.gif)
 _Resolving a URL example_
 
-![example](render_example.gif)
-_layout and render example_
+<!-- ![example](render_example.gif)
+_layout and render example_ -->
 
 ### Note:
 

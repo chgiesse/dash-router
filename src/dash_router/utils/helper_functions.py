@@ -1,5 +1,3 @@
-from asyncio import iscoroutinefunction
-
 import os
 from _plotly_utils.optional_imports import get_module
 from plotly.io._json import clean_to_json_compatible, config, JsonConfig
@@ -7,13 +5,9 @@ from fnmatch import fnmatch
 import re
 
 
-async def _invoke_layout(func, *func_args, **func_kwargs):
-    if iscoroutinefunction(func):
-        return await func(*func_args, **func_kwargs)
-
+def _invoke_layout(func, *func_args, **func_kwargs):
     if callable(func):
         return func(*func_args, **func_kwargs)
-
     return func
 
 
