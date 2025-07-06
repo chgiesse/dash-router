@@ -1,10 +1,13 @@
 from ast import arg
 import importlib
+import importlib.util
 import json
 import os
 import traceback
+import sys
 from typing import Any, Callable, Dict, List, Literal
 from uuid import UUID, uuid4
+from pathlib import Path
 
 from dash import html, dcc, Input, Output, State, MATCH, callback
 from dash._get_paths import app_strip_relative_path
@@ -13,7 +16,7 @@ from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
 from dash_router.core.context import RoutingContext
 from dash import Dash
-from dash._pages import _parse_query_string
+from dash._pages import _parse_query_string, _infer_module_name
 from flask import request
 
 from .utils.constants import DEFAULT_LAYOUT_TOKEN
@@ -44,7 +47,7 @@ class Router:
         self.route_table = {}
         self.requests_pathname_prefix = requests_pathname_prefix
         self.ignore_empty_folders = ignore_empty_folders
-        self.pages_folder = pages_folder
+        self.pages_folder = app.pages_folder if hasattr(app, 'pages_folder') and app.pages_folder else pages_folder
 
         if not isinstance(self.app, Dash):
             raise TypeError(f"App needs to be of Dash not: {type(self.app)}")
@@ -55,8 +58,19 @@ class Router:
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
-        root_dir = ".".join(self.app.server.name.split(os.sep)[:-1])
-        self._traverse_directory(root_dir, self.pages_folder, None)
+        # root_dir = ".".join(self.app.server.name.split(os.sep)[:-1])
+
+        pages_path = Path(self.pages_folder)
+        app_dir = pages_path.parent
+
+        if not pages_path.exists():
+            raise FileNotFoundError(
+                f"Pages folder not found at: {pages_path}\n"
+                f"Current working directory: {Path.cwd()}\n"
+                f"Current working directory: {self.pages_folder}\n"
+            )
+
+        self._traverse_directory(str(app_dir), self.pages_folder, None)
 
     def _validate_node(self, node: PageNode):
         # Validate Slots
@@ -110,7 +124,7 @@ class Router:
         """Load modules and create Page Node"""
         relative_path = os.path.relpath(current_dir, self.pages_folder)
         relative_path = format_relative_path(relative_path)
-        page_module_name = path_to_module(current_dir, "page.py")
+        page_module_name = path_to_module(relative_path, "page.py")
         parent_node_id = parent_node.node_id if parent_node else None
 
         route_config = (
@@ -132,7 +146,7 @@ class Router:
         layout_inputs, inp_types = extract_function_inputs(page_layout)
         inputs = set(endpoint_inputs + layout_inputs)
 
-        node_id = str(uuid4())
+        node_id = relative_path # format(abs(hash(relative_path)))
         new_node = PageNode(
             _segment=segment,
             node_id=node_id,
@@ -160,18 +174,30 @@ class Router:
         file_name: Literal["page.py", "error.py", "loading.py", "api.py"],
         component_name: Literal["layout", "config", "endpoint"] = "layout",
     ) -> Callable[..., Component] | Component | None:
-        page_module_name = path_to_module(current_dir, file_name)
+        # page_module_name = path_to_module(current_dir, file_name)
+        page_path = os.path.join(current_dir, file_name)
+        page_module_name = _infer_module_name(page_path)
+
         try:
-            page_module = importlib.import_module(page_module_name)
-            layout = getattr(page_module, component_name, None)
-            if file_name == "page.py" and not layout:
+            spec = importlib.util.spec_from_file_location(page_module_name, page_path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Cannot create spec for {page_path}")
+
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            layout = getattr(module, component_name, None)
+
+            if page_module_name not in sys.modules:
+                sys.modules[page_module_name] = module            
+
+            if file_name == "page.py" and not layout and component_name == "layout":
                 raise ImportError(
                     f"Module {page_module_name} needs a layout function or component"
                 )
             return layout
 
         except ImportError as e:
-            if file_name == "layout.py":
+            if file_name == "page.py" and component_name == "layout":
                 print(f"Error processing {page_module_name}: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
                 raise ImportError(
@@ -198,11 +224,14 @@ class Router:
 
         next_segment = ctx.peek_segment()
         segment_key = current_node.create_segment_key(next_segment)
+        print("next_segment", current_node.segment_value, next_segment, segment_key, flush=True)
         is_lacy = ctx.should_lazy_load(current_node, segment_key)
 
         if current_node.is_path_template:
             ctx.consume_path_var(current_node)
             next_segment = ctx.peek_segment()
+        
+        print("Current node: ", current_node.child_nodes, current_node.segment_value, current_node.path, flush=True)
 
         exec_node = ExecNode(
             segment=segment_key,
@@ -548,17 +577,22 @@ class Router:
         def load_lacy_component(
             lacy_segment_id, variables, pathname, search, loading_state
         ):
+            print(f"Loading lacy component: {lacy_segment_id}", flush=True)
+            print(f"Pathname: {pathname}", flush=True)
+            print(f"Search: {search}", flush=True)
+            print(f"Loading state: {loading_state}", flush=True)
+            print(f"Variables: {variables}", flush=True)
+            
             node_id = lacy_segment_id.get("index")
             qs = _parse_query_string(search)
             query_parameters = loading_state.pop("query_params", {})
             node_variables = json.loads(variables)
             variables = {**qs, **query_parameters, **node_variables}
-
             lacy_node = RouteTable.get_node(node_id)
             path = self.strip_relative_path(pathname)
             segments = path.split("/")
-            node_segments = lacy_node.module.split(".")[1:-1]
-            current_index = node_segments.index(lacy_node.segment_value)
+            node_segments = lacy_node.module.split(".")[:-1]
+            current_index = node_segments.index(lacy_node.segment_value.replace("_", "-"))
             remaining_segments = list(reversed(segments[current_index:]))
 
             ctx = RoutingContext.from_request(
