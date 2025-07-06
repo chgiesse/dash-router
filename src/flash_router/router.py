@@ -1,6 +1,7 @@
 import importlib
 import json
 import os
+from re import T
 import traceback
 import sys
 from typing import Awaitable, Callable, Dict, List, Literal
@@ -124,7 +125,7 @@ class Router:
         """Load modules and create Page Node"""
         relative_path = os.path.relpath(current_dir, self.app.config.pages_folder)
         relative_path = format_relative_path(relative_path)
-        page_module_name = path_to_module(current_dir, "page.py")
+        page_module_name = path_to_module(relative_path, "page.py")
         parent_node_id = parent_node.node_id if parent_node else None
 
         route_config = (
@@ -146,7 +147,7 @@ class Router:
         layout_inputs, inp_types = extract_function_inputs(page_layout)
         inputs = set(endpoint_inputs + layout_inputs)
 
-        node_id = str(uuid4())
+        node_id = relative_path # format(abs(hash(relative_path)))
         new_node = PageNode(
             _segment=segment,
             node_id=node_id,
@@ -180,6 +181,9 @@ class Router:
 
         try:
             spec = importlib.util.spec_from_file_location(page_module_name, page_path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Cannot create spec for {page_path}")
+
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             layout = getattr(module, component_name, None)
@@ -187,14 +191,14 @@ class Router:
             if page_module_name not in sys.modules:
                 sys.modules[page_module_name] = module            
 
-            if file_name == "page.py" and not layout:
+            if file_name == "page.py" and not layout and component_name == "layout":
                 raise ImportError(
                     f"Module {page_module_name} needs a layout function or component"
                 )
             return layout
 
         except ImportError as e:
-            if file_name == "page.py":
+            if file_name == "page.py" and component_name == "layout":
                 print(f"Error processing {page_module_name}: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
                 raise ImportError(
@@ -221,11 +225,14 @@ class Router:
 
         next_segment = ctx.peek_segment()
         segment_key = current_node.create_segment_key(next_segment)
+        print("next_segment", current_node.segment_value, next_segment, segment_key, flush=True)
         is_lacy = ctx.should_lazy_load(current_node, segment_key)
 
         if current_node.is_path_template:
             ctx.consume_path_var(current_node)
             next_segment = ctx.peek_segment()
+        
+        print("Current node: ", current_node.child_nodes, current_node.segment_value, current_node.path, flush=True)
 
         exec_node = ExecNode(
             segment=segment_key,
@@ -582,17 +589,22 @@ class Router:
         async def load_lacy_component(
             lacy_segment_id, variables, pathname, search, loading_state
         ):
+            print(f"Loading lacy component: {lacy_segment_id}", flush=True)
+            print(f"Pathname: {pathname}", flush=True)
+            print(f"Search: {search}", flush=True)
+            print(f"Loading state: {loading_state}", flush=True)
+            print(f"Variables: {variables}", flush=True)
+            
             node_id = lacy_segment_id.get("index")
             qs = _parse_query_string(search)
             query_parameters = loading_state.pop("query_params", {})
             node_variables = json.loads(variables)
             variables = {**qs, **query_parameters, **node_variables}
-
             lacy_node = RouteTable.get_node(node_id)
             path = self.strip_relative_path(pathname)
             segments = path.split("/")
-            node_segments = lacy_node.module.split(".")[1:-1]
-            current_index = node_segments.index(lacy_node.segment_value)
+            node_segments = lacy_node.module.split(".")[:-1]
+            current_index = node_segments.index(lacy_node.segment_value.replace("_", "-"))
             remaining_segments = list(reversed(segments[current_index:]))
 
             ctx = RoutingContext.from_request(
