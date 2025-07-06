@@ -60,7 +60,7 @@ class Router:
         """Sets up the route tree by traversing the pages folder."""
         # root_dir = ".".join(self.app.server.name.split(os.sep)[:-1])
 
-        pages_path = Path(self.pages_folder)
+        pages_path = Path(self.app.config.pages_folder)
         app_dir = pages_path.parent
 
         if not pages_path.exists():
@@ -122,7 +122,7 @@ class Router:
         self, current_dir: str, segment: str, parent_node: PageNode
     ) -> PageNode | None:
         """Load modules and create Page Node"""
-        relative_path = os.path.relpath(current_dir, self.pages_folder)
+        relative_path = os.path.relpath(current_dir, self.app.config.pages_folder)
         relative_path = format_relative_path(relative_path)
         page_module_name = path_to_module(relative_path, "page.py")
         parent_node_id = parent_node.node_id if parent_node else None
@@ -180,15 +180,13 @@ class Router:
 
         try:
             spec = importlib.util.spec_from_file_location(page_module_name, page_path)
-            if spec is None or spec.loader is None:
-                raise ImportError(f"Cannot create spec for {page_path}")
-
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             layout = getattr(module, component_name, None)
 
             if page_module_name not in sys.modules:
                 sys.modules[page_module_name] = module            
+       
 
             if file_name == "page.py" and not layout and component_name == "layout":
                 raise ImportError(
