@@ -130,15 +130,7 @@ Modal components that correspond to routes and update the URL when opened/closed
 │   │   │       ├── (figure_2)/
 │   │   │       │   ├── page.py
 │   │   │       │   └── api.py
-│   │   │       ├── (figure_3)/
-│   │   │       │   ├── page.py
-│   │   │       │   └── api.py
-│   │   │       ├── (figure_4)/
-│   │   │       │   ├── page.py
-│   │   │       │   └── api.py
-│   │   │       └── (figure_5)/
-│   │   │           ├── page.py
-│   │   │           └── api.py
+│   │   │       ├── ...
 │   │   ├── dashboard/
 │   │   │   ├── page.py                 -> /sales/dashboard
 │   │   │   ├── api.py                  -> Data endpoint
@@ -203,22 +195,7 @@ Modal components that correspond to routes and update the URL when opened/closed
 │   │       │   ├── page.py
 │   │       │   ├── api.py
 │   │       │   └── loading.py
-│   │       ├── (slot_32)/
-│   │       │   ├── page.py
-│   │       │   ├── api.py
-│   │       │   └── loading.py
-│   │       ├── (slot_33)/
-│   │       │   ├── page.py
-│   │       │   ├── api.py
-│   │       │   └── loading.py
-│   │       ├── (slot_34)/
-│   │       │   ├── page.py
-│   │       │   ├── error.py
-│   │       │   └── loading.py
-│   │       └── (slot_35)/
-│   │           ├── page.py
-│   │           ├── api.py
-│   │           └── loading.py
+│   │       ├── ...
 
 │   └── files/
 │       ├── page.py                     -> /files
@@ -234,14 +211,26 @@ Modal components that correspond to routes and update the URL when opened/closed
 - Insert the `RootContainer` - this where your content gets displayed
 
 ```python
-# app.py
-from dash_router import Router, RootContainer
+# app.py with Flash 
+from flash_router import FlashRouter, RootContainer
 from flash import Flash
 from dash import html
 
 
 app = Flash(__name__, pages_folder='pages')
-router = Router(app, ignore_empty_folders=True)
+router = FlashRouter(app, ignore_empty_folders=True)
+
+app.layout = html.Div([RootContainer()])
+```
+
+```python
+# app.py with Dash 
+from dash_router import DashRouter, RootContainer
+from dash import Dash, html
+
+
+app = Dash(__name__, pages_folder='pages')
+router = DashRouter(app, ignore_empty_folders=True)
 
 app.layout = html.Div([RootContainer()])
 ```
@@ -320,9 +309,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 import pandas as pd
 import asyncio
-
-NAMESPACE = "example-dashboard"
-TTL = 60 * 5
 
 
 @db_operator(verbose=True)
