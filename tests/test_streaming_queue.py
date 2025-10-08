@@ -85,3 +85,56 @@ async def test_queue_preserves_hierarchy():
     completed_nodes = {event.node_id for event in events if event.event_type == "complete"}
     assert completed_nodes == {"root", "child", "slot"}
 
+
+@pytest.mark.asyncio
+async def test_queue_handles_lazy_nodes():
+    async def root_layout(data, children):
+        yield html.Div("root")
+        yield html.Div(children)
+
+    def loading_layout(**_):
+        return html.Div("loading")
+
+    async def lazy_layout(data):
+        await asyncio.sleep(0)
+        return html.Div(f"resolved-{data}")
+
+    root = ExecNode(
+        segment="root",
+        node_id="root",
+        parent_id="",
+        layout=root_layout,
+        variables={},
+    )
+
+    lazy_node = ExecNode(
+        segment="lazy",
+        node_id="lazy",
+        parent_id="root",
+        layout=lazy_layout,
+        variables={},
+        loading=loading_layout,
+        is_lacy=True,
+    )
+
+    root.child_node = lazy_node
+
+    endpoint_results = {
+        "root": "root-data",
+        "lazy": "lazy-data",
+    }
+
+    queue = ExecutionQueue(root, endpoint_results)
+    events = await _collect_events(queue)
+
+    lazy_events = [event for event in events if event.node_id == "lazy"]
+
+    assert lazy_events[0].event_type == "lacy"
+    assert isinstance(lazy_events[0].payload.children, html.Div)
+
+    layout_events = [event for event in lazy_events if event.event_type == "layout"]
+    assert layout_events, "lazy node should eventually stream its real layout"
+    assert layout_events[0].payload.children == "resolved-lazy-data"
+
+    assert any(event.event_type == "complete" for event in lazy_events)
+

@@ -16,7 +16,7 @@ applied.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from inspect import isasyncgen, isasyncgenfunction, isawaitable, iscoroutinefunction
 from typing import Any, AsyncGenerator, Dict, Iterable, List, Optional
 
@@ -24,7 +24,7 @@ from dash import html
 from dash.development.base_component import Component
 
 from .execution import ExecNode
-from ..components import ChildContainer, SlotContainer
+from ..components import ChildContainer, LacyContainer, SlotContainer
 from ..utils.helper_functions import _invoke_layout
 
 
@@ -95,13 +95,18 @@ class ExecutionQueue:
 
         if node.is_lacy:
             loading_layout = await _invoke_layout(node.loading, **node.variables)
+            placeholder = LacyContainer(loading_layout, node.node_id, node.variables)
             yield StreamEvent(
                 node_id=node.node_id,
                 segment=node.segment,
                 depth=depth,
                 parent_id=parent_id,
-                payload=loading_layout,
+                payload=placeholder,
                 event_type="lacy",
+            )
+
+            await self._schedule_lazy_resolution(
+                node, depth=depth, parent_id=parent_id
             )
             return
 
@@ -184,6 +189,21 @@ class ExecutionQueue:
             asyncio.create_task(
                 self._process_node(child, depth=depth, parent_id=parent_id)
             )
+
+    async def _schedule_lazy_resolution(
+        self,
+        node: ExecNode,
+        *,
+        depth: int,
+        parent_id: Optional[str],
+    ) -> None:
+        """Re-enqueue a lazy node to resolve its real layout once ready."""
+
+        await self._increment_pending()
+        resolved_node = replace(node, is_lacy=False, loading=None)
+        asyncio.create_task(
+            self._process_node(resolved_node, depth=depth, parent_id=parent_id)
+        )
 
     async def _invoke_for_stream(self, layout, **kwargs):
         if isasyncgenfunction(layout):
