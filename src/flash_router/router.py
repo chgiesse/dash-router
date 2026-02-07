@@ -13,7 +13,7 @@ from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
-from flash import Flash, Input, Output, State, MATCH
+from flash import Flash, Input, Output, State, MATCH, callback
 from flash._pages import _parse_query_string, _infer_module_name
 from quart import request
 import asyncio
@@ -101,7 +101,6 @@ class Router:
         if dir_has_page:
             new_node = self.load_route_module(current_dir, segment, current_node)
             if new_node is not None:
-
                 RouteTable.add_node(new_node)
                 RouteTree.add_node(new_node, current_node)
 
@@ -147,7 +146,7 @@ class Router:
         layout_inputs, inp_types = extract_function_inputs(page_layout)
         inputs = set(endpoint_inputs + layout_inputs)
 
-        node_id = relative_path # format(abs(hash(relative_path)))
+        node_id = relative_path  # format(abs(hash(relative_path)))
         new_node = PageNode(
             _segment=segment,
             node_id=node_id,
@@ -189,7 +188,7 @@ class Router:
             layout = getattr(module, component_name, None)
 
             if page_module_name not in sys.modules:
-                sys.modules[page_module_name] = module            
+                sys.modules[page_module_name] = module
 
             if file_name == "page.py" and not layout and component_name == "layout":
                 raise ImportError(
@@ -225,14 +224,26 @@ class Router:
 
         next_segment = ctx.peek_segment()
         segment_key = current_node.create_segment_key(next_segment)
-        print("next_segment", current_node.segment_value, next_segment, segment_key, flush=True)
+        print(
+            "next_segment",
+            current_node.segment_value,
+            next_segment,
+            segment_key,
+            flush=True,
+        )
         is_lacy = ctx.should_lazy_load(current_node, segment_key)
 
         if current_node.is_path_template:
             ctx.consume_path_var(current_node)
             next_segment = ctx.peek_segment()
-        
-        print("Current node: ", current_node.child_nodes, current_node.segment_value, current_node.path, flush=True)
+
+        print(
+            "Current node: ",
+            current_node.child_nodes,
+            current_node.segment_value,
+            current_node.path,
+            flush=True,
+        )
 
         exec_node = ExecNode(
             segment=segment_key,
@@ -565,7 +576,7 @@ class Router:
             )
             inputs.update(self.app.routing_callback_inputs)
 
-            @self.app.callback(
+            @callback(
                 Output(RootContainer.ids.dummy, "children"),
                 inputs=inputs,
             )
@@ -583,9 +594,7 @@ class Router:
             loading_state=State(RootContainer.ids.state_store, "data"),
         )
 
-        @self.app.callback(
-            Output(LacyContainer.ids.container(MATCH), "children"), inputs=inputs
-        )
+        @callback(Output(LacyContainer.ids.container(MATCH), "children"), inputs=inputs)
         async def load_lacy_component(
             lacy_segment_id, variables, pathname, search, loading_state
         ):
@@ -594,7 +603,7 @@ class Router:
             print(f"Search: {search}", flush=True)
             print(f"Loading state: {loading_state}", flush=True)
             print(f"Variables: {variables}", flush=True)
-            
+
             node_id = lacy_segment_id.get("index")
             qs = _parse_query_string(search)
             query_parameters = loading_state.pop("query_params", {})
@@ -604,7 +613,9 @@ class Router:
             path = self.strip_relative_path(pathname)
             segments = path.split("/")
             node_segments = lacy_node.module.split(".")[:-1]
-            current_index = node_segments.index(lacy_node.segment_value.replace("_", "-"))
+            current_index = node_segments.index(
+                lacy_node.segment_value.replace("_", "-")
+            )
             remaining_segments = list(reversed(segments[current_index:]))
 
             ctx = RoutingContext.from_request(
