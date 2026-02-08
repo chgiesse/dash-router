@@ -176,6 +176,10 @@ class Router:
     ) -> Callable[..., Component] | Component | None:
         # page_module_name = path_to_module(current_dir, file_name)
         page_path = os.path.join(current_dir, file_name)
+        if not os.path.exists(page_path):
+            if file_name == "page.py" and component_name == "layout":
+                raise ImportError(f"Module {page_path} needs a layout function or component")
+            return None
         page_module_name = _infer_module_name(page_path)
 
         try:
@@ -522,7 +526,13 @@ class Router:
             cb_data = self.app.callback_map[output]
             inputs_state_indices = cb_data["inputs_state_indices"]
             args = inputs_to_vals(inputs + state)
-            pathname_, search_, loading_state_, states_ = args
+
+            if self.app.routing_callback_inputs:
+                pathname_, search_, loading_state_, states_ = args
+            else:
+                pathname_, search_, loading_state_ = args
+                states_ = None
+
             query_parameters = _parse_query_string(search_)
             previous_qp = loading_state_.pop("query_params", {})
             _, func_kwargs = validate_and_group_input_args(args, inputs_state_indices)
