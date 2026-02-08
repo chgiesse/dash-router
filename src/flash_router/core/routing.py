@@ -124,7 +124,6 @@ class PageNode(BaseModel):
 
 
 class RouteTable:
-
     _table: ClassVar[Dict[str, PageNode]] = {}
 
     def __new__(cls):
@@ -143,7 +142,6 @@ class RouteTable:
 
 
 class RouteTree:
-
     _static_routes: ClassVar[Dict[str, str]] = {}
     _dynamic_routes: ClassVar[AttributeDict] = AttributeDict(
         routes={}, path_template=None
@@ -206,7 +204,6 @@ class RouteTree:
         ctx.segments = list(reversed(ctx.segments))
 
         while ctx.segments:
-
             if active_node is None:
                 return active_node
 
@@ -218,7 +215,6 @@ class RouteTree:
                 return active_node
 
             if active_node.is_path_template:
-
                 if len(ctx.segments) <= 1:
                     return active_node
 
@@ -230,7 +226,7 @@ class RouteTree:
 
             if child_node := active_node.get_child_node(next_segment):
                 if child_node.is_path_template and child_node.segment == REST_TOKEN:
-                    return active_node
+                    return child_node
 
                 if not child_node.is_path_template:
                     ctx.pop_segment()
