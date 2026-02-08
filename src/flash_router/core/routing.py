@@ -1,5 +1,5 @@
 from ..utils.helper_functions import _parse_path_variables
-from ..utils.constants import DEFAULT_LAYOUT_TOKEN
+from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
 
 from typing import (
     Any,
@@ -229,6 +229,9 @@ class RouteTree:
             ctx.set_silent_loading_states(active_node, "done")
 
             if child_node := active_node.get_child_node(next_segment):
+                if child_node.is_path_template and child_node.segment == REST_TOKEN:
+                    return active_node
+
                 if not child_node.is_path_template:
                     ctx.pop_segment()
 

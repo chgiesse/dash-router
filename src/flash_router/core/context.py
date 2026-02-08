@@ -118,8 +118,9 @@ class RoutingContext:
 
     def merge_segments(self, ignore_empty_folders: bool):
         """Merge segments if empty folder should be ignored"""
-        if ignore_empty_folders or len(self.segments) < 2:
+        if not ignore_empty_folders or len(self.segments) < 2:
             self.pop_segment()
+            return
 
         first = self.segments.pop()
         second = self.segments.pop()
