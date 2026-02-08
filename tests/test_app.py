@@ -2,7 +2,7 @@ from dash import html
 from flash import Flash
 from flash_router import FlashRouter, RootContainer
 
-from utils.helpers import store_route_table, store_route_tree
+# from utils.helpers import store_route_table, store_route_tree
 
 
 app = Flash(
@@ -15,7 +15,7 @@ app = Flash(
 
 app.layout = html.Div(RootContainer())
 
-store_route_table()
-store_route_tree()
+# store_route_table()
+# store_route_tree()
 
-app.run(port=33333)
+app.run(port=33333, debug=True)

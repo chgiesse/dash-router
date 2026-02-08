@@ -23,14 +23,16 @@ Use this document to stay aligned with existing patterns and workflows.
 ### Tests
 - There is no test runner configured.
 - The only test-like file is `test.py` (a minimal usage example).
+- Automated tests use pytest; run `poetry run pytest`.
 - Basic run: `poetry run python test.py`
 - Test app: `poetry run python tests/test_app.py`
   - Dumps route table/tree JSON to `tests/utils/route_table.json` and
     `tests/utils/route_tree.json`.
+- Example pages in `tests/pages` include `projects/[team_id]/files/[__rest]` for
+  catch-all routing behavior.
 
 ### Single Test
-- No single-test workflow exists yet.
-- If you introduce pytest later, use:
+- Use pytest for single tests:
   - `poetry run pytest path/to/test_file.py::TestClass::test_name`
   - `poetry run pytest -k test_name`
 
@@ -77,6 +79,10 @@ Use this document to stay aligned with existing patterns and workflows.
 - Layouts can be async for Flash/Quart.
 - Layouts and endpoints accept keyword args extracted from URL/query params.
 - Keep layout functions side-effect free; data comes from `endpoint`.
+- Path template layouts are rendered with the template variable set to `None`
+  when the URL omits that segment (e.g., `/projects` renders
+  `projects/[team_id]` with `team_id=None`), which is the current default-layout
+  behavior.
 
 ### Error Handling
 - The router prefers explicit exceptions with clear messages.
@@ -104,6 +110,43 @@ Use this document to stay aligned with existing patterns and workflows.
 - Core types: `flash_router/core/routing.py`
 - Execution flow: `flash_router/core/execution.py`
 - Helper utilities: `flash_router/utils/helper_functions.py`
+
+## Features
+
+### Catch-All Routes (`[__rest]`)
+- **Definition**: A catch-all is a path template node named `[__rest]` that
+  captures all remaining URL segments and exposes them as a list `rest`.
+- **Placement**: Catch-all nodes must be the last node in their branch, but they
+  can still define slots.
+- **Active node semantics**: The active node is the last already-rendered node
+  in the branch. For deep catch-all paths, the active node remains the parent
+  route (e.g., `projects/[team_id]/files`), while `[__rest]` renders as the leaf
+  layout within that branch; if `/files` is the root and the URL is
+  `/files/1/2/3`, the active node remains `files`.
+- **Captured values**:
+  - `/projects/alpha/files` -> `rest == []`
+  - `/projects/alpha/files/1` -> `rest == ["1"]`
+  - `/projects/alpha/files/1/2/3` -> `rest == ["1", "2", "3"]`
+
+## Potential Improvements
+- **Route priority rules**: Define explicit precedence for static vs dynamic vs
+  catch-all and document conflict resolution at the same path depth.
+- **Optional catch-all**: Consider a distinct optional catch-all (e.g.,
+  `[[...rest]]`) vs the current `[__rest]` behavior that accepts empty lists.
+- **Route groups**: Document or formalize non-routing folders (similar to Next
+  route groups) beyond `ignore_empty_folders`, distinct from slots.
+- **Search re-render rules**: Clarify how query param changes map to nodes,
+  including Pydantic model matching and `None` for missing params.
+- **Custom 404 / not found**: Provide a documented pattern for custom 404
+  layouts instead of the default H1.
+- **Programmatic navigation**: Add a public helper for URL generation and
+  navigation (push/replace), especially for `[param]` and `[__rest]`.
+- **Route guards / middleware**: Define hooks (e.g., before layout execution)
+  for auth checks and redirects.
+- **Metadata aggregation**: Specify how `RouteConfig` metadata composes across
+  nested routes (title, description, images).
+- **Prefetch / data caching**: Consider prefetching route data and caching
+  endpoint results to reduce re-render work.
 
 ## Notes for Agentic Work
 - This repository currently has no automated lint/test gates.

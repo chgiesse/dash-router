@@ -13,7 +13,7 @@ from typing import (
 )
 from dash.development.base_component import Component
 from dash._utils import AttributeDict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
 
 
@@ -30,15 +30,16 @@ class RouteConfig(BaseModel):
 
 
 class RouterResponse(BaseModel):
-    response: Dict[str, any]
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    response: Dict[str, Any]
     mimetype: str = "application/json"
     multi: bool = False
 
-    class Config:
-        arbitrary_types_allowed = True
-
 
 class PageNode(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, populate_by_name=True)
+
     segment_value: str = Field(alias="_segment")  # Changed to use alias
     node_id: str
     layout: Callable[..., Awaitable[Component]] | Component
@@ -55,10 +56,6 @@ class PageNode(BaseModel):
     error: Optional[Callable[..., Awaitable[Component]] | Component] = None
     endpoint: Optional[Callable[..., Awaitable[Any]]] = None
     endpoint_inputs: Optional[List[Any]] = None
-
-    class Config:
-        arbitrary_types_allowed = True
-        populate_by_name = True
 
     @property
     def is_slot(self) -> bool:
