@@ -24,6 +24,9 @@ Use this document to stay aligned with existing patterns and workflows.
 - There is no test runner configured.
 - The only test-like file is `test.py` (a minimal usage example).
 - Basic run: `poetry run python test.py`
+- Test app: `poetry run python tests/test_app.py`
+  - Dumps route table/tree JSON to `tests/utils/route_table.json` and
+    `tests/utils/route_tree.json`.
 
 ### Single Test
 - No single-test workflow exists yet.

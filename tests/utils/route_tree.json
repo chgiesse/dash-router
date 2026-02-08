@@ -1,0 +1,77 @@
+{
+  "dynamic": {
+    "path_template": null,
+    "routes": {
+      "files": {
+        "child_nodes": {},
+        "default_child": null,
+        "endpoint_inputs": [],
+        "is_root": true,
+        "is_static": false,
+        "module": "files.page",
+        "node_id": "files",
+        "parent_id": "/",
+        "path": "files",
+        "path_template": "files/[--rest]",
+        "segment_value": "files",
+        "slots": {}
+      },
+      "nested-route": {
+        "child_nodes": {
+          "child-1": "nested-route/child-1",
+          "child-2": "nested-route/child-2",
+          "child-3": "nested-route/child-3"
+        },
+        "default_child": null,
+        "endpoint_inputs": [],
+        "is_root": true,
+        "is_static": false,
+        "module": "nested-route.page",
+        "node_id": "nested-route",
+        "parent_id": "/",
+        "path": "nested-route",
+        "path_template": null,
+        "segment_value": "nested_route",
+        "slots": {
+          "slot_1": "nested-route/(slot-1)",
+          "slot_2": "nested-route/(slot-2)"
+        }
+      },
+      "sales": {
+        "child_nodes": {
+          "analytics": "sales/analytics",
+          "dashboard": "sales/dashboard",
+          "invoices": "sales/invoices",
+          "overview": "sales/overview"
+        },
+        "default_child": "overview",
+        "endpoint_inputs": [],
+        "is_root": true,
+        "is_static": false,
+        "module": "sales.page",
+        "node_id": "sales",
+        "parent_id": "/",
+        "path": "sales",
+        "path_template": null,
+        "segment_value": "sales",
+        "slots": {}
+      }
+    }
+  },
+  "static": {
+    "/": {
+      "child_nodes": {},
+      "default_child": null,
+      "endpoint_inputs": [],
+      "is_root": null,
+      "is_static": true,
+      "module": ".page",
+      "node_id": "/",
+      "parent_id": null,
+      "path": "/",
+      "path_template": null,
+      "segment_value": "/",
+      "slots": {}
+    }
+  }
+}
