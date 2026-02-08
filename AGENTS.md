@@ -1,12 +1,12 @@
 # Agent Guidelines for dash-router
 
-This repository contains a Python library for file-system routing in Dash/Flash.
+This repository contains a Python library for file-system routing in Flash/Quart.
 Use this document to stay aligned with existing patterns and workflows.
 
 ## Repository Basics
 - Language: Python 3.12+
 - Packaging: Poetry (pyproject.toml)
-- Primary modules: `src/dash_router`, `src/flash_router`
+- Primary module: `flash_router`
 
 ## Build / Lint / Test
 
@@ -39,7 +39,7 @@ Use this document to stay aligned with existing patterns and workflows.
 
 ### Imports
 - Follow this order: standard library, third-party, then local imports.
-- Keep related imports grouped (see `src/dash_router/router.py`).
+- Keep related imports grouped (see `flash_router/router.py`).
 - Use explicit imports from `typing` instead of `typing.*`.
 
 ### Formatting
@@ -70,8 +70,8 @@ Use this document to stay aligned with existing patterns and workflows.
 - Catch-all uses `[__rest]`.
 
 ### Layout Functions
-- A `layout` can be a Dash component or a callable that returns one.
-- `Dash` layouts must be synchronous; `Flash` layouts can be async.
+- A `layout` can be a component or a callable that returns one.
+- Layouts can be async for Flash/Quart.
 - Layouts and endpoints accept keyword args extracted from URL/query params.
 - Keep layout functions side-effect free; data comes from `endpoint`.
 
@@ -94,15 +94,13 @@ Use this document to stay aligned with existing patterns and workflows.
 
 ### General Guidance
 - Keep changes localized and consistent with existing module patterns.
-- When editing `dash_router` and `flash_router`, mirror changes where
-  appropriate to keep feature parity.
 - Prefer clarity over cleverness; this code is used by external apps.
 
 ## Quick References
-- Primary router: `src/dash_router/router.py`
-- Core types: `src/dash_router/core/routing.py`
-- Execution flow: `src/dash_router/core/execution.py`
-- Helper utilities: `src/dash_router/utils/helper_functions.py`
+- Primary router: `flash_router/router.py`
+- Core types: `flash_router/core/routing.py`
+- Execution flow: `flash_router/core/execution.py`
+- Helper utilities: `flash_router/utils/helper_functions.py`
 
 ## Notes for Agentic Work
 - This repository currently has no automated lint/test gates.

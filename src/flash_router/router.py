@@ -598,11 +598,11 @@ class Router:
         async def load_lacy_component(
             lacy_segment_id, variables, pathname, search, loading_state
         ):
-            print(f"Loading lacy component: {lacy_segment_id}", flush=True)
-            print(f"Pathname: {pathname}", flush=True)
-            print(f"Search: {search}", flush=True)
-            print(f"Loading state: {loading_state}", flush=True)
-            print(f"Variables: {variables}", flush=True)
+            # print(f"Loading lacy component: {lacy_segment_id}", flush=True)
+            # print(f"Pathname: {pathname}", flush=True)
+            # print(f"Search: {search}", flush=True)
+            # print(f"Loading state: {loading_state}", flush=True)
+            # print(f"Variables: {variables}", flush=True)
 
             node_id = lacy_segment_id.get("index")
             qs = _parse_query_string(search)

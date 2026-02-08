@@ -1,15 +1,11 @@
 [tool.poetry]
 name = "flash_router"
-version = "0.5.0-beta.3"
+version = "0.6.0-beta.1"
 description = "File-system based router for Dash and Flash applications."
 authors = ["chgiesse"]
 repository = "https://github.com/chgiesse/dash-router"
 license = "MIT"
 readme = "README.md"
-packages = [
-    { include = "dash_router", from = "src" },
-    { include = "flash_router", from = "src" }
-]
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -18,8 +14,33 @@ dash = "^3.0.0rc1"
 # Only Flash is optional - needed for flash_router package
 dash-flash = "^1.0.0" 
 
-[tool.poetry.extras]
-async = ["dash-flash"]
+[tool.basedpyright]
+typeCheckingMode = "off"
+diagnosticMode = "workspace"
+reportAny = "none"
+reportArgumentType = "none"
+reportAttributeAccessIssue = "none"
+reportCallIssue = "none"
+reportDeprecated = "none"
+reportExplicitAny = "none"
+reportGeneralTypeIssues = "none"
+reportImplicitStringConcatenation = "none"
+reportMissingTypeArgument = "none"
+reportMissingTypeStubs = "none"
+reportOptionalIterable = "none"
+reportOperatorIssue = "none"
+reportPrivateUsage = "none"
+reportReturnType = "none"
+reportUnannotatedClassAttribute = "none"
+reportUnnecessaryIsInstance = "none"
+reportUnknownArgumentType = "none"
+reportUnknownMemberType = "none"
+reportUnknownParameterType = "none"
+reportUnknownVariableType = "none"
+reportUnusedCallResult = "none"
+reportUnusedImport = "none"
+reportUnusedVariable = "none"
+reportUnreachable = "none"
 
 [build-system]
 requires = ["poetry-core"]
