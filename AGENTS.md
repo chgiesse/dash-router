@@ -24,12 +24,15 @@ Use this document to stay aligned with existing patterns and workflows.
 - There is no test runner configured.
 - The only test-like file is `test.py` (a minimal usage example).
 - Automated tests use pytest; run `poetry run pytest`.
+- Unit tests live in `tests/unit_tests` and can be run directly with pytest.
 - Basic run: `poetry run python test.py`
 - Test app: `poetry run python tests/test_app.py`
   - Dumps route table/tree JSON to `tests/utils/route_table.json` and
     `tests/utils/route_tree.json`.
 - Example pages in `tests/pages` include `projects/[team_id]/files/[__rest]` for
   catch-all routing behavior.
+- Example pages in `tests/pages` include `tickets/[ticket_id]/(detail)` and
+  `tickets/[ticket_id]/(activity)` for nested routes with slot child nodes.
 
 ### Single Test
 - Use pytest for single tests:
@@ -58,6 +61,7 @@ Use this document to stay aligned with existing patterns and workflows.
 - Use `Dict`, `List`, and `Callable` from `typing` where needed.
 - For public APIs, annotate inputs and return values.
 - Pydantic models are used for config objects (see `RouteConfig`).
+- Prefer Pydantic v2 `ConfigDict` over class-based `Config` to avoid deprecation warnings.
 
 ### Naming Conventions
 - Classes: `PascalCase` (e.g., `RouteTree`, `ExecNode`).

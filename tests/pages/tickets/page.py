@@ -1,5 +1,5 @@
-from flash_router import ChildContainer
 from dash import dcc, html
+from flash_router import ChildContainer
 
 from components import create_box
 
@@ -7,20 +7,16 @@ from components import create_box
 async def layout(children: ChildContainer = None, **kwargs):
     sample_links = html.Ul(
         [
-            html.Li(dcc.Link("/files", href="/files")),
-            html.Li(dcc.Link("/files/readme.md", href="/files/readme.md")),
-            html.Li(
-                dcc.Link(
-                    "/files/docs/getting-started", href="/files/docs/getting-started"
-                )
-            ),
-            html.Li(dcc.Link("/files/assets/logo.svg", href="/files/assets/logo.svg")),
+            html.Li(dcc.Link("/tickets", href="/tickets")),
+            html.Li(dcc.Link("/tickets/1001", href="/tickets/1001")),
+            html.Li(dcc.Link("/tickets/1001/summary", href="/tickets/1001/summary")),
+            html.Li(dcc.Link("/tickets/1001/comments", href="/tickets/1001/comments")),
         ],
         style={"margin": "0"},
     )
 
     detail_panel = children or html.Div(
-        "Pick a file path to inspect.",
+        "Select a ticket to see details.",
         style={"color": "#555"},
     )
 
@@ -28,9 +24,9 @@ async def layout(children: ChildContainer = None, **kwargs):
         [
             html.Div(
                 [
-                    html.H3("Files"),
+                    html.H3("Support Tickets"),
                     html.P(
-                        "Catch-all routing lives under /files/[__rest].",
+                        "Ticket selection lives under /tickets/<ticket_id>.",
                         style={"marginTop": "0"},
                     ),
                     html.P("Try these URLs:", style={"marginBottom": "4px"}),
@@ -39,7 +35,7 @@ async def layout(children: ChildContainer = None, **kwargs):
                 style={"flex": "1"},
             ),
             html.Div(
-                [html.H4("File Workspace"), detail_panel],
+                [html.H4("Ticket Workspace"), detail_panel],
                 style={
                     "flex": "1",
                     "borderLeft": "1px solid #ddd",
@@ -49,8 +45,9 @@ async def layout(children: ChildContainer = None, **kwargs):
         ],
         style={"display": "flex", "gap": "16px"},
     )
+
     return create_box(
-        "tests/pages/files/page.py",
+        "tests/pages/tickets/page.py",
         content,
         **kwargs,
     )

@@ -56,3 +56,59 @@ server.
   - active node: `files`
   - `ctx.path_vars["rest"] == ["1", "2", "3"]`
   - exec tree leaf: `files/[__rest]`
+
+## Nested + Slot Route Tests Plan
+
+### Goal
+Validate nested route behavior combined with slots and slot child nodes using
+data structures only (active node, execution tree, and routing context) without
+rendering layouts or running a server.
+
+### Scope
+- Nested route selection for `/tickets/[ticket_id]`.
+- Slot rendering under a nested route: `(detail)` and `(activity)`.
+- Child node resolution within slots: `summary` and `comments`.
+- Path variable propagation for `ticket_id` across nested and slot branches.
+
+### Approach
+1) **Core-level tests only**
+   - Use `RoutingContext`, `RouteTree.get_active_root_node`, and
+     `Router.build_execution_tree`.
+   - Avoid layout execution and server setup.
+
+2) **Use the tickets example**
+   - `tickets/[ticket_id]/(detail)/summary` and
+     `tickets/[ticket_id]/(activity)/comments` in `tests/pages`.
+
+3) **Reset static registries per test**
+   - Clear `RouteTable` and `RouteTree` static state in an autouse fixture to
+     prevent cross-test pollution.
+
+4) **Assert active node and slot leaves**
+   - Active node remains the nested route (`tickets/[ticket_id]`).
+   - Exec tree includes both slot branches; leaf nodes reflect `summary` and
+     `comments` when requested.
+
+### Proposed Test Cases
+- `/tickets`
+  - active node: `tickets`
+  - exec tree leaf: `tickets`
+
+- `/tickets/1001`
+  - active node: `tickets/[ticket_id]`
+  - `ctx.path_vars["ticket_id"] == "1001"`
+  - exec tree includes slot leaves:
+    - `tickets/[ticket_id]/(detail)`
+    - `tickets/[ticket_id]/(activity)`
+
+- `/tickets/1001/summary`
+  - active node: `tickets/[ticket_id]`
+  - `ctx.path_vars["ticket_id"] == "1001"`
+  - exec tree includes slot leaf:
+    - `tickets/[ticket_id]/(detail)/summary`
+
+- `/tickets/1001/comments`
+  - active node: `tickets/[ticket_id]`
+  - `ctx.path_vars["ticket_id"] == "1001"`
+  - exec tree includes slot leaf:
+    - `tickets/[ticket_id]/(activity)/comments`

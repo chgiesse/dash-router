@@ -1,7 +1,14 @@
 import json
+from pathlib import Path
 
+import pytest
+from dash._utils import AttributeDict
 from dash.development.base_component import Component
+from flash import Flash
+
+from flash_router import FlashRouter
 from flash_router.core.routing import PageNode, RouteTable, RouteTree
+from flash_router.utils.helper_functions import format_relative_path
 
 
 def serialize_value(value):
@@ -53,3 +60,43 @@ def store_route_table(path: str = "tests/utils/route_table.json") -> None:
 def store_route_tree(path: str = "tests/utils/route_tree.json") -> None:
     with open(path, "w+", encoding="utf-8") as file:
         json.dump(serialize_route_tree(), file, indent=2, sort_keys=True)
+
+
+def get_leaf_node(exec_node):
+    current = exec_node
+    while current and current.child_node and current.child_node != "default":
+        current = current.child_node
+    return current
+
+
+def done_state(node, next_segment):
+    segment_key = node.create_segment_key(next_segment)
+    return segment_key, {"state": "done", "node_id": node.node_id}
+
+
+def get_node_by_path(path):
+    formatted_path = format_relative_path(path)
+    for node in RouteTable._table.values():
+        if node.path == formatted_path:
+            return node
+    return None
+
+
+@pytest.fixture(autouse=True)
+def reset_route_state():
+    RouteTable._table = {}
+    RouteTree._static_routes = {}
+    RouteTree._dynamic_routes = AttributeDict(routes={}, path_template=None)
+    yield
+
+
+@pytest.fixture()
+def router():
+    pages_dir = Path(__file__).resolve().parents[1] / "pages"
+    app = Flash(
+        __name__,
+        prevent_initial_callbacks=True,
+        pages_folder=str(pages_dir),
+        use_pages=False,
+    )
+    return FlashRouter(app)
