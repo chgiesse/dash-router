@@ -224,26 +224,12 @@ class Router:
 
         next_segment = ctx.peek_segment()
         segment_key = current_node.create_segment_key(next_segment)
-        print(
-            "next_segment",
-            current_node.segment_value,
-            next_segment,
-            segment_key,
-            flush=True,
-        )
+
         is_lacy = ctx.should_lazy_load(current_node, segment_key)
 
         if current_node.is_path_template:
             ctx.consume_path_var(current_node)
             next_segment = ctx.peek_segment()
-
-        print(
-            "Current node: ",
-            current_node.child_nodes,
-            current_node.segment_value,
-            current_node.path,
-            flush=True,
-        )
 
         exec_node = ExecNode(
             segment=segment_key,
