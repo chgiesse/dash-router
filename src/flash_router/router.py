@@ -32,7 +32,11 @@ from .core.routing import PageNode, RouteConfig, RouteTable, RouteTree, RouterRe
 from .core.query_params import extract_function_inputs
 from .core.context import RoutingContext
 from .core.execution import ExecNode
-from ._validation import RouteConfigConflictError
+from ._validation import (
+    RouteConfigConflictError,
+    RouteLayoutMissingError,
+    RouteModuleImportError,
+)
 
 
 class Router:
@@ -221,8 +225,8 @@ class Router:
         page_path = os.path.join(current_dir, file_name)
         if not os.path.exists(page_path):
             if file_name == "page.py" and component_name == "layout":
-                raise ImportError(
-                    f"Module {page_path} needs a layout function or component"
+                raise RouteLayoutMissingError(
+                    f"Route file {page_path} must define a layout function or component."
                 )
             return None
         page_module_name = _infer_module_name(page_path)
@@ -234,33 +238,29 @@ class Router:
 
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            layout = getattr(module, component_name, None)
-
-            if page_module_name not in sys.modules:
-                sys.modules[page_module_name] = module
-
-            if (
-                file_name in {"page.py", "default.py"}
-                and not layout
-                and component_name == "layout"
-            ):
-                raise ImportError(
-                    f"Module {page_module_name} needs a layout function or component"
-                )
-            return layout
-
-        except ImportError as e:
-            if file_name in {"page.py", "default.py"} and component_name == "layout":
-                print(f"Error processing {page_module_name}: {e}")
-                print(f"Traceback: {traceback.format_exc()}")
-                raise ImportError(
-                    f"Module {page_module_name} needs a layout function or component"
-                )
         except Exception as e:
-            print(f"Error processing {page_module_name}: {e}")
-            print(f"Traceback: {traceback.format_exc()}")
+            raise RouteModuleImportError(
+                "Failed to import route module "
+                f"{page_module_name} from {page_path}: "
+                f"{e.__class__.__name__}: {e}"
+            ) from e
 
-        return None
+        layout = getattr(module, component_name, None)
+
+        if page_module_name not in sys.modules:
+            sys.modules[page_module_name] = module
+
+        if (
+            file_name in {"page.py", "default.py"}
+            and not layout
+            and component_name == "layout"
+        ):
+            raise RouteLayoutMissingError(
+                f"Route module {page_module_name} at {page_path} must define "
+                "a layout function or component."
+            )
+
+        return layout
 
     def build_execution_tree(
         self,

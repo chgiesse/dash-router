@@ -12,6 +12,14 @@ class RouteConfigConflictError(Exception):
     pass
 
 
+class RouteModuleImportError(Exception):
+    pass
+
+
+class RouteLayoutMissingError(Exception):
+    pass
+
+
 def validate_static_route(node: PageNode):
     if not node.is_static:
         return
