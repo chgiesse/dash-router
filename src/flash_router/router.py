@@ -136,6 +136,7 @@ class Router:
         segment = relative_path if is_static else segment
 
         page_layout = self.import_route_component(current_dir, "page.py")
+        default_layout = self.import_route_component(current_dir, "default.py")
         loading_layout = self.import_route_component(current_dir, "loading.py")
         error_layout = (
             self.import_route_component(current_dir, "error.py") or self.app._on_error
@@ -151,6 +152,7 @@ class Router:
             _segment=segment,
             node_id=node_id,
             layout=page_layout,
+            default_layout=default_layout,
             parent_id=parent_node_id,
             module=page_module_name,
             is_root=is_root,
@@ -171,14 +173,22 @@ class Router:
     def import_route_component(
         self,
         current_dir: str,
-        file_name: Literal["page.py", "error.py", "loading.py", "api.py"],
+        file_name: Literal[
+            "page.py",
+            "error.py",
+            "loading.py",
+            "api.py",
+            "default.py",
+        ],
         component_name: Literal["layout", "config", "endpoint"] = "layout",
     ) -> Callable[..., Component] | Component | None:
         # page_module_name = path_to_module(current_dir, file_name)
         page_path = os.path.join(current_dir, file_name)
         if not os.path.exists(page_path):
             if file_name == "page.py" and component_name == "layout":
-                raise ImportError(f"Module {page_path} needs a layout function or component")
+                raise ImportError(
+                    f"Module {page_path} needs a layout function or component"
+                )
             return None
         page_module_name = _infer_module_name(page_path)
 
@@ -194,14 +204,18 @@ class Router:
             if page_module_name not in sys.modules:
                 sys.modules[page_module_name] = module
 
-            if file_name == "page.py" and not layout and component_name == "layout":
+            if (
+                file_name in {"page.py", "default.py"}
+                and not layout
+                and component_name == "layout"
+            ):
                 raise ImportError(
                     f"Module {page_module_name} needs a layout function or component"
                 )
             return layout
 
         except ImportError as e:
-            if file_name == "page.py" and component_name == "layout":
+            if file_name in {"page.py", "default.py"} and component_name == "layout":
                 print(f"Error processing {page_module_name}: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
                 raise ImportError(
@@ -230,6 +244,13 @@ class Router:
         segment_key = current_node.create_segment_key(next_segment)
 
         is_lacy = ctx.should_lazy_load(current_node, segment_key)
+        layout = current_node.layout
+        if (
+            current_node.is_path_template
+            and DEFAULT_LAYOUT_TOKEN in segment_key
+            and current_node.default_layout is not None
+        ):
+            layout = current_node.default_layout
 
         if current_node.is_path_template:
             ctx.consume_path_var(current_node)
@@ -238,7 +259,7 @@ class Router:
         exec_node = ExecNode(
             segment=segment_key,
             node_id=current_node.node_id,
-            layout=current_node.layout,
+            layout=layout,
             parent_id=current_node.parent_id,
             variables=ctx.variables,
             loading=current_node.loading,
@@ -250,7 +271,7 @@ class Router:
             ctx.set_node_state(current_node, "done", segment_key)
             return exec_node
 
-        if current_node.endpoint and not DEFAULT_LAYOUT_TOKEN in segment_key:
+        if current_node.endpoint and DEFAULT_LAYOUT_TOKEN not in segment_key:
             ctx.add_endpoint(current_node)
 
         if current_node.child_nodes or current_node.path_template:
@@ -594,11 +615,6 @@ class Router:
         async def load_lacy_component(
             lacy_segment_id, variables, pathname, search, loading_state
         ):
-            # print(f"Loading lacy component: {lacy_segment_id}", flush=True)
-            # print(f"Pathname: {pathname}", flush=True)
-            # print(f"Search: {search}", flush=True)
-            # print(f"Loading state: {loading_state}", flush=True)
-            # print(f"Variables: {variables}", flush=True)
 
             node_id = lacy_segment_id.get("index")
             qs = _parse_query_string(search)

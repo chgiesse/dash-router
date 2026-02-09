@@ -43,6 +43,7 @@ class PageNode(BaseModel):
     segment_value: str = Field(alias="_segment")  # Changed to use alias
     node_id: str
     layout: Callable[..., Awaitable[Component]] | Component
+    default_layout: Optional[Callable[..., Awaitable[Component]] | Component] = None
     module: str
     parent_id: Optional[str] = None
     path: Optional[str] = None
