@@ -3,7 +3,7 @@ from dash import html
 
 from components import create_box
 
-config = RouteConfig(default_child="child-11")
+# config = RouteConfig(default_child="slot-31")
 
 
 async def layout(

@@ -9,8 +9,6 @@ async def layout(children: ChildContainer = None, **kwargs):
         [
             html.Li(dcc.Link("/tickets", href="/tickets")),
             html.Li(dcc.Link("/tickets/1001", href="/tickets/1001")),
-            html.Li(dcc.Link("/tickets/1001/summary", href="/tickets/1001/summary")),
-            html.Li(dcc.Link("/tickets/1001/comments", href="/tickets/1001/comments")),
         ],
         style={"margin": "0"},
     )

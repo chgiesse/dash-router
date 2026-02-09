@@ -1,18 +1,22 @@
 from dash import html
-from flash_router import ChildContainer
+from flash_router import SlotContainer
 
 from components import create_box
 
 
 async def layout(
-    children: ChildContainer = None,
+    summary: SlotContainer = None,
     ticket_id: str | int | None = None,
     **kwargs,
 ):
+    summary_panel = summary or html.Div(
+        "No summary loaded.",
+        style={"color": "#555"},
+    )
     content = html.Div(
         [
             html.P(f"Detail panel for ticket {ticket_id}"),
-            children,
+            summary_panel,
         ],
         style={"display": "flex", "flexDirection": "column", "gap": "6px"},
     )

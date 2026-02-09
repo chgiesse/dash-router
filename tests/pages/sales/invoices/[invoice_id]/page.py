@@ -3,7 +3,9 @@ from dash import html
 
 from components import create_box
 
-config = RouteConfig(default_child="items")
+config = RouteConfig(
+    default_child="items", default=html.Div("Default State if no invoice selected")
+)
 
 
 async def layout(

@@ -6,11 +6,11 @@ from components import create_box
 async def layout(ticket_id: str | int | None = None, **kwargs):
     content = html.Div(
         [
-            html.P(f"Comments for ticket {ticket_id}"),
+            html.P(f"Summary for ticket {ticket_id}"),
             html.Ul(
                 [
-                    html.Li("Customer: Issue persists after restart."),
-                    html.Li("Agent: Investigating log output."),
+                    html.Li("Priority: High"),
+                    html.Li("Status: Open"),
                 ],
                 style={"margin": "0"},
             ),
@@ -18,7 +18,7 @@ async def layout(ticket_id: str | int | None = None, **kwargs):
         style={"display": "flex", "flexDirection": "column", "gap": "4px"},
     )
     return create_box(
-        "tests/pages/tickets/[ticket_id]/(activity)/comments/page.py",
+        "tests/pages/tickets/[ticket_id]/(detail)/(summary)/page.py",
         content,
         **kwargs,
     )
