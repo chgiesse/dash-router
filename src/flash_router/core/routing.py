@@ -18,6 +18,8 @@ from uuid import UUID
 
 
 class RouteConfig(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, populate_by_name=True)
+
     default_child: str | None = None
     is_static: bool | None = None
     title: str | None = None
@@ -27,6 +29,11 @@ class RouteConfig(BaseModel):
     image: str | None = None
     image_url: str | None = None
     redirect_from: List[str] | None = None
+    default_layout: Callable[..., Awaitable[Component]] | Component | None = Field(
+        default=None, alias="default"
+    )
+    loading: Callable[..., Awaitable[Component]] | Component | None = None
+    error: Callable[..., Awaitable[Component]] | Component | None = None
 
 
 class RouterResponse(BaseModel):

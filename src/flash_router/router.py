@@ -32,6 +32,7 @@ from .core.routing import PageNode, RouteConfig, RouteTable, RouteTree, RouterRe
 from .core.query_params import extract_function_inputs
 from .core.context import RoutingContext
 from .core.execution import ExecNode
+from ._validation import RouteConfigConflictError
 
 
 class Router:
@@ -135,12 +136,46 @@ class Router:
         is_root = parent_node and parent_node.segment == "/"
         segment = relative_path if is_static else segment
 
+        default_path = os.path.join(current_dir, "default.py")
+        loading_path = os.path.join(current_dir, "loading.py")
+        error_path = os.path.join(current_dir, "error.py")
+
+        if route_config.default_layout is not None and os.path.exists(default_path):
+            raise RouteConfigConflictError(
+                f"Route config conflict for {relative_path}: default layout is defined in "
+                "RouteConfig and default.py. Remove one to continue."
+            )
+
+        if route_config.loading is not None and os.path.exists(loading_path):
+            raise RouteConfigConflictError(
+                f"Route config conflict for {relative_path}: loading layout is defined in "
+                "RouteConfig and loading.py. Remove one to continue."
+            )
+
+        if route_config.error is not None and os.path.exists(error_path):
+            raise RouteConfigConflictError(
+                f"Route config conflict for {relative_path}: error layout is defined in "
+                "RouteConfig and error.py. Remove one to continue."
+            )
+
         page_layout = self.import_route_component(current_dir, "page.py")
-        default_layout = self.import_route_component(current_dir, "default.py")
-        loading_layout = self.import_route_component(current_dir, "loading.py")
-        error_layout = (
-            self.import_route_component(current_dir, "error.py") or self.app._on_error
+        default_layout = (
+            route_config.default_layout
+            if route_config.default_layout is not None
+            else self.import_route_component(current_dir, "default.py")
         )
+        loading_layout = (
+            route_config.loading
+            if route_config.loading is not None
+            else self.import_route_component(current_dir, "loading.py")
+        )
+        if route_config.error is not None:
+            error_layout = route_config.error
+        else:
+            error_layout = (
+                self.import_route_component(current_dir, "error.py")
+                or self.app._on_error
+            )
 
         endpoint = self.import_route_component(current_dir, "api.py", "endpoint")
         endpoint_inputs, end_types = extract_function_inputs(endpoint)

@@ -8,6 +8,10 @@ class RouteTreeValidationError(Exception):
     pass
 
 
+class RouteConfigConflictError(Exception):
+    pass
+
+
 def validate_static_route(node: PageNode):
     if not node.is_static:
         return

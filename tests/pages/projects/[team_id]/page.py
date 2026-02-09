@@ -1,7 +1,19 @@
-from flash_router import ChildContainer
+from flash_router import ChildContainer, RouteConfig
 from dash import html
 
 from components import create_box
+
+config = RouteConfig(
+    default=html.Div(
+        [
+            html.H4("Choose a team", style={"marginBottom": "4px"}),
+            html.P(
+                "This is the default view for /projects before a team is selected.",
+                style={"marginTop": "0"},
+            ),
+        ]
+    )
+)
 
 
 async def layout(

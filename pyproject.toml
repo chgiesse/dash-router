@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flash_router"
-version = "0.6.0-beta.2"
+version = "0.6.0-beta.3"
 description = "File-system based router for Dash and Flash applications."
 authors = ["chgiesse"]
 repository = "https://github.com/chgiesse/dash-router"
@@ -13,6 +13,8 @@ pydantic = "^2.10.4"
 dash = "^3.0.0rc1"
 # Only Flash is optional - needed for flash_router package
 dash-flash = "^1.0.0" 
+
+[tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"
 
 [tool.basedpyright]
