@@ -13,7 +13,7 @@ app = Flash(
     router=FlashRouter,
 )
 
-app.layout = html.Div(RootContainer())
+app.layout = html.Div(RootContainer(), className="app-root")
 
 # store_route_table()
 # store_route_tree()

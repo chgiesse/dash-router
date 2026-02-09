@@ -6,12 +6,10 @@ from components import create_box
 
 
 async def layout(rest: list | None = None, *args, **kwargs):
-    print("rest in layout", rest, flush=True)
     link_count = random.randint(1, 5)
     base_path = "/files"
     rest_segments = rest or []
     url = base_path if not rest_segments else f"{base_path}/" + "/".join(rest_segments)
-    print(url, flush=True)
     links = html.Ul(
         [
             html.Li(

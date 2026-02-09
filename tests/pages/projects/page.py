@@ -45,6 +45,7 @@ async def layout(children: ChildContainer = None, **kwargs):
                     "flex": "1",
                     "borderLeft": "1px solid #ddd",
                     "paddingLeft": "12px",
+                    "width": "50%",
                 },
             ),
         ],

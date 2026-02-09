@@ -1,0 +1,33 @@
+:root {
+  --bg: #0a0c10;
+  --bg-elev: #121924;
+  --text: #e6edf3;
+  --muted: #9aa4b2;
+  --border: #273142;
+  --accent: #59c1b3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Source Sans 3", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#_dash-app-content,
+.app-root {
+  min-height: 100vh;
+  color: var(--text);
+}
+
+.app-root {
+  padding: 24px;
+}
+
+a {
+  color: var(--accent);
+}

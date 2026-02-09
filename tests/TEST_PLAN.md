@@ -57,20 +57,20 @@ server.
   - `ctx.path_vars["rest"] == ["1", "2", "3"]`
   - exec tree leaf: `files/[__rest]`
 
-## Nested + Slot Route Tests Plan
+# Nested + Slot Route Tests Plan
 
-### Goal
+## Goal
 Validate nested route behavior combined with slots and slot child nodes using
 data structures only (active node, execution tree, and routing context) without
 rendering layouts or running a server.
 
-### Scope
+## Scope
 - Nested route selection for `/tickets/[ticket_id]`.
 - Slot rendering under a nested route: `(detail)` and `(activity)`.
 - Child node resolution within slots: `summary` and `comments`.
 - Path variable propagation for `ticket_id` across nested and slot branches.
 
-### Approach
+## Approach
 1) **Core-level tests only**
    - Use `RoutingContext`, `RouteTree.get_active_root_node`, and
      `Router.build_execution_tree`.
@@ -89,7 +89,7 @@ rendering layouts or running a server.
    - Exec tree includes both slot branches; leaf nodes reflect `summary` and
      `comments` when requested.
 
-### Proposed Test Cases
+## Proposed Test Cases
 - `/tickets`
   - active node: `tickets`
   - exec tree leaf: `tickets`

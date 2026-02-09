@@ -9,7 +9,7 @@ async def layout(
     team_id: str | None = None,
     **kwargs,
 ):
-    content = html.Div(children)
+    content = html.Div(children, style={"minHeight": 100})
     return create_box(
         "tests/pages/projects/[team_id]/files/page.py",
         content,

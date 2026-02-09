@@ -20,7 +20,7 @@ def create_box(name: str, content=None, *args, **kwargs):
     return html.Div(
         [
             html.Div(name, style={"fontWeight": "600"}),
-            html.Pre(details, style={"margin": "0"}),
+            html.Pre(details),
             content,
         ],
         style={

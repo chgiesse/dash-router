@@ -22,10 +22,8 @@ Use this document to stay aligned with existing patterns and workflows.
 
 ### Tests
 - There is no test runner configured.
-- The only test-like file is `test.py` (a minimal usage example).
 - Automated tests use pytest; run `poetry run pytest`.
 - Unit tests live in `tests/unit_tests` and can be run directly with pytest.
-- Basic run: `poetry run python test.py`
 - Test app: `poetry run python tests/test_app.py`
   - Dumps route table/tree JSON to `tests/utils/route_table.json` and
     `tests/utils/route_tree.json`.

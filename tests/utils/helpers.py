@@ -15,7 +15,7 @@ def serialize_value(value):
     if isinstance(value, PageNode):
         return value.model_dump(
             mode="python",
-            exclude={"layout", "loading", "error", "endpoint"},
+            exclude={"layout", "default_layout", "loading", "error", "endpoint"},
         )
     if isinstance(value, Component):
         return f"<{value.__class__.__name__}>"
