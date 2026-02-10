@@ -36,6 +36,7 @@ from ._validation import (
     RouteConfigConflictError,
     RouteLayoutMissingError,
     RouteModuleImportError,
+    validate_tree,
 )
 
 
@@ -77,17 +78,7 @@ class Router:
             )
 
         self._traverse_directory(str(app_dir), self.pages_folder, None)
-
-    def _validate_node(self, node: PageNode):
-        # Validate Slots
-
-        # Validate children
-        if node.default_child:
-            pass
-
-    def _validate_tree(self):
-        for root_node in self.dynamic_routes.routes.items():
-            self._validate_node(root_node)
+        validate_tree(RouteTable._table)
 
     def _traverse_directory(
         self,
@@ -229,6 +220,7 @@ class Router:
                     f"Route file {page_path} must define a layout function or component."
                 )
             return None
+
         page_module_name = _infer_module_name(page_path)
 
         try:

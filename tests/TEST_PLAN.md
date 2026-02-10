@@ -60,14 +60,14 @@ server.
 # Nested + Slot Route Tests Plan
 
 ## Goal
-Validate nested route behavior combined with slots and slot child nodes using
-data structures only (active node, execution tree, and routing context) without
+Validate nested route behavior combined with slots and nested slots using data
+structures only (active node, execution tree, and routing context) without
 rendering layouts or running a server.
 
 ## Scope
 - Nested route selection for `/tickets/[ticket_id]`.
 - Slot rendering under a nested route: `(detail)` and `(activity)`.
-- Child node resolution within slots: `summary` and `comments`.
+- Nested slot resolution within slots: `(summary)` and `(comments)`.
 - Path variable propagation for `ticket_id` across nested and slot branches.
 
 ## Approach
@@ -77,8 +77,8 @@ rendering layouts or running a server.
    - Avoid layout execution and server setup.
 
 2) **Use the tickets example**
-   - `tickets/[ticket_id]/(detail)/summary` and
-     `tickets/[ticket_id]/(activity)/comments` in `tests/pages`.
+   - `tickets/[ticket_id]/(detail)/(summary)` and
+     `tickets/[ticket_id]/(activity)/(comments)` in `tests/pages`.
 
 3) **Reset static registries per test**
    - Clear `RouteTable` and `RouteTree` static state in an autouse fixture to
@@ -101,14 +101,9 @@ rendering layouts or running a server.
     - `tickets/[ticket_id]/(detail)`
     - `tickets/[ticket_id]/(activity)`
 
-- `/tickets/1001/summary`
+- `/tickets/1001`
   - active node: `tickets/[ticket_id]`
   - `ctx.path_vars["ticket_id"] == "1001"`
-  - exec tree includes slot leaf:
-    - `tickets/[ticket_id]/(detail)/summary`
-
-- `/tickets/1001/comments`
-  - active node: `tickets/[ticket_id]`
-  - `ctx.path_vars["ticket_id"] == "1001"`
-  - exec tree includes slot leaf:
-    - `tickets/[ticket_id]/(activity)/comments`
+  - exec tree includes nested slots:
+    - `tickets/[ticket_id]/(detail)/(summary)`
+    - `tickets/[ticket_id]/(activity)/(comments)`

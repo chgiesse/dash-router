@@ -30,7 +30,7 @@ Use this document to stay aligned with existing patterns and workflows.
 - Example pages in `tests/pages` include `projects/[team_id]/files/[__rest]` for
   catch-all routing behavior.
 - Example pages in `tests/pages` include `tickets/[ticket_id]/(detail)` and
-  `tickets/[ticket_id]/(activity)` for nested routes with slot child nodes.
+  `tickets/[ticket_id]/(activity)` for nested routes with nested slots.
 
 ### Single Test
 - Use pytest for single tests:
@@ -96,12 +96,6 @@ Use this document to stay aligned with existing patterns and workflows.
 - Endpoint functions live in `api.py` and are named `endpoint`.
 - Endpoints return serializable data (dict, list, DataFrame, etc.).
 - Use helper serialization (`recursive_to_plotly_json`) when needed.
-
-### Router/Execution Patterns
-- `RouteTable` and `RouteTree` are static registries; do not instantiate.
-- Use `RouteConfig` for route metadata (static routes, titles, defaults).
-- Use `ChildContainer`, `SlotContainer`, and `LacyContainer` to render
-  nested and lazy elements.
 
 ### General Guidance
 - Keep changes localized and consistent with existing module patterns.
