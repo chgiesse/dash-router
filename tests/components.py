@@ -1,5 +1,4 @@
 from pprint import pformat
-
 from dash import html
 
 
