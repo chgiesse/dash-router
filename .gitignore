@@ -7,6 +7,7 @@ __pycache__/
 *.so
 
 .vscode/
+.flash_router_typing/
 
 # Distribution / packaging
 .Python

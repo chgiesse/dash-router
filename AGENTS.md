@@ -109,6 +109,32 @@ Use this document to stay aligned with existing patterns and workflows.
 
 ## Features
 
+### URL Builder (`url_for`)
+- **Location**: `src/flash_router/navigation.py`
+- **Purpose**: Build URL paths from route node IDs and typed/untyped params.
+- **Inputs**:
+  - `route_id: str` (typically from generated `RouteId` literals)
+  - `params_or_model: BaseModel | None`
+  - `**kwargs` fallback params
+- **Behavior**:
+  - Replaces dynamic segments like `[team-id]`.
+  - Supports snake_case fallback for hyphenated route params
+    (`team-id` resolves from `team_id`).
+  - Ignores slot/group segments (`(slot_name)`) while composing the URL.
+  - Supports catch-all segments `[__rest]` and `[--rest]` via `rest=`.
+  - Catch-all values can be scalar/list/tuple; empty/`None` entries are omitted.
+  - Raises `ValueError` when required path params are missing.
+  - Raises `ValueError` if `__rest` or `--rest` are passed directly; use `rest`.
+
+### Navigation Typing Stubs
+- **Generator**: `generate_navigation_typing(route_ids)` in
+  `src/flash_router/navigation.py`.
+- **Output path**: `.flash_router_typing/flash_router/`
+  - `_route_types.pyi` defines `RouteId = Literal[...]`
+  - `navigation.pyi` defines route-specific `url_for` overloads
+  - `__init__.pyi` re-exports `RouteId` and `url_for`
+- **Note**: Route IDs are canonicalized before generation.
+
 ### Catch-All Routes (`[__rest]`)
 - **Definition**: A catch-all is a path template node named `[__rest]` that
   captures all remaining URL segments and exposes them as a list `rest`.
@@ -135,8 +161,8 @@ Use this document to stay aligned with existing patterns and workflows.
   including Pydantic model matching and `None` for missing params.
 - **Custom 404 / not found**: Provide a documented pattern for custom 404
   layouts instead of the default H1.
-- **Programmatic navigation**: Add a public helper for URL generation and
-  navigation (push/replace), especially for `[param]` and `[__rest]`.
+- **Programmatic navigation**: `url_for` is now available; remaining work is
+  server-side/client-side redirect and push/replace ergonomics.
 - **Route guards / middleware**: Define hooks (e.g., before layout execution)
   for auth checks and redirects.
 - **Metadata aggregation**: Specify how `RouteConfig` metadata composes across

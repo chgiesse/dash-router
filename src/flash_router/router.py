@@ -28,6 +28,7 @@ from .utils.helper_functions import (
 )
 
 from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
+from .navigation import generate_navigation_typing
 from .core.routing import PageNode, RouteConfig, RouteTable, RouteTree, RouterResponse
 from .core.query_params import extract_function_inputs
 from .core.context import RoutingContext
@@ -79,6 +80,7 @@ class Router:
 
         self._traverse_directory(str(app_dir), self.pages_folder, None)
         validate_tree(RouteTable._table)
+        generate_navigation_typing(self.app, sorted(RouteTable._table.keys()))
 
     def _traverse_directory(
         self,
