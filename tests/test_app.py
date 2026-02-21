@@ -1,4 +1,5 @@
 from dash import html
+from pathlib import Path
 from flash import Flash
 from flash_router import FlashRouter, RootContainer
 
@@ -8,7 +9,8 @@ from flash_router import FlashRouter, RootContainer
 app = Flash(
     __name__,
     prevent_initial_callbacks=True,
-    pages_folder="pages",
+    suppress_callback_exceptions=True,
+    pages_folder=str(Path(__file__).parent / "pages"),
     use_pages=False,
     router=FlashRouter,
 )

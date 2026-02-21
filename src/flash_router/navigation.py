@@ -1,9 +1,7 @@
 import re
 import json
-import os
 from pathlib import Path
 from typing import TypeAlias, cast
-from flash import Flash
 from pydantic import BaseModel
 
 
@@ -102,20 +100,6 @@ def _canonicalize_route_ids(route_ids: list[str]) -> list[str]:
     return canonical_route_ids
 
 
-def _is_development_mode(app: Flash):
-    print(app.server.config)
-    for env_var in ("FLASH_ROUTER_ENV", "FLASK_ENV", "ENV"):
-        value = os.getenv(env_var)
-        if isinstance(value, str) and value:
-            normalized = value.strip().lower()
-            if normalized in {"production", "prod"}:
-                return False
-            if normalized in {"development", "dev"}:
-                return True
-
-    return True
-
-
 def _to_python_param_name(route_param: str) -> str | None:
     candidate = route_param.replace("-", "_")
     if not candidate.isidentifier():
@@ -193,10 +177,7 @@ def _build_navigation_stub(route_ids: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def generate_navigation_typing(app: Flash, route_ids: list[str]) -> None:
-    if not _is_development_mode(app):
-        return
-
+def generate_navigation_typing(route_ids: list[str]) -> None:
     canonical_route_ids = _canonicalize_route_ids(route_ids)
 
     if canonical_route_ids:

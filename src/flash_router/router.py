@@ -57,7 +57,7 @@ class Router:
         self.ignore_empty_folders = ignore_empty_folders
         self.pages_folder = app.pages_folder if app.pages_folder else pages_folder
 
-        if not isinstance(self.app, Flash):
+        if not isinstance(self.app, Flash): # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError(f"App needs to be of Flash not: {type(self.app)}")
 
         self.setup_route_tree()
@@ -68,19 +68,19 @@ class Router:
         """Sets up the route tree by traversing the pages folder."""
         # root_dir = ".".join(self.app.server.name.split(os.sep)[:-1])
 
-        pages_path = Path(self.app.config.pages_folder)
+        pages_path = Path(self.pages_folder)
         app_dir = pages_path.parent
 
         if not pages_path.exists():
-            raise FileNotFoundError(
+            raise FileNotFoundError((
                 f"Pages folder not found at: {pages_path}\n"
                 f"Current working directory: {Path.cwd()}\n"
                 f"Current working directory: {self.pages_folder}\n"
-            )
+            ))
 
         self._traverse_directory(str(app_dir), self.pages_folder, None)
         validate_tree(RouteTable._table)
-        generate_navigation_typing(self.app, sorted(RouteTable._table.keys()))
+        generate_navigation_typing(sorted(RouteTable._table.keys()))
 
     def _traverse_directory(
         self,
@@ -120,7 +120,7 @@ class Router:
         self, current_dir: str, segment: str, parent_node: PageNode
     ) -> PageNode | None:
         """Load modules and create Page Node"""
-        relative_path = os.path.relpath(current_dir, self.app.config.pages_folder)
+        relative_path = os.path.relpath(current_dir, self.pages_folder)
         relative_path = format_relative_path(relative_path)
         page_module_name = path_to_module(relative_path, "page.py")
         parent_node_id = parent_node.node_id if parent_node else None
@@ -139,19 +139,19 @@ class Router:
 
         if route_config.default_layout is not None and os.path.exists(default_path):
             raise RouteConfigConflictError(
-                f"Route config conflict for {relative_path}: default layout is defined in "
+                f"Route config conflict for {relative_path}: default layout is defined in " +
                 "RouteConfig and default.py. Remove one to continue."
             )
 
         if route_config.loading is not None and os.path.exists(loading_path):
             raise RouteConfigConflictError(
-                f"Route config conflict for {relative_path}: loading layout is defined in "
+                f"Route config conflict for {relative_path}: loading layout is defined in " +
                 "RouteConfig and loading.py. Remove one to continue."
             )
 
         if route_config.error is not None and os.path.exists(error_path):
             raise RouteConfigConflictError(
-                f"Route config conflict for {relative_path}: error layout is defined in "
+                f"Route config conflict for {relative_path}: error layout is defined in " +
                 "RouteConfig and error.py. Remove one to continue."
             )
 
@@ -175,8 +175,8 @@ class Router:
             )
 
         endpoint = self.import_route_component(current_dir, "api.py", "endpoint")
-        endpoint_inputs, end_types = extract_function_inputs(endpoint)
-        layout_inputs, inp_types = extract_function_inputs(page_layout)
+        endpoint_inputs, _ = extract_function_inputs(endpoint)
+        layout_inputs, _ = extract_function_inputs(page_layout)
         inputs = set(endpoint_inputs + layout_inputs)
 
         node_id = relative_path  # format(abs(hash(relative_path)))
@@ -233,11 +233,11 @@ class Router:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
         except Exception as e:
-            raise RouteModuleImportError(
+            raise RouteModuleImportError((
                 "Failed to import route module "
                 f"{page_module_name} from {page_path}: "
                 f"{e.__class__.__name__}: {e}"
-            ) from e
+            )) from e
 
         layout = getattr(module, component_name, None)
 
@@ -249,18 +249,18 @@ class Router:
             and not layout
             and component_name == "layout"
         ):
-            raise RouteLayoutMissingError(
+            raise RouteLayoutMissingError((
                 f"Route module {page_module_name} at {page_path} must define "
                 "a layout function or component."
-            )
+            ))
 
         return layout
 
     def build_execution_tree(
         self,
-        current_node: PageNode,
+        current_node: PageNode | None,
         ctx: RoutingContext,
-    ) -> ExecNode:
+    ) -> ExecNode | None:
         """
         Recursively builds the execution tree for the matched route.
         It extracts any path variables, processes child nodes, and handles slot nodes.

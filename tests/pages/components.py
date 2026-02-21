@@ -1,3 +1,4 @@
+from flash_router.navigation import url_for
 from flash import callback, Input, Output
 from quart.ctx import after_this_request
 from quart import Response
@@ -32,7 +33,9 @@ loader = dcc.Loading(id="loader", type="circle")
 )
 async def redirect_callback(click):
     print("Executed 1 callback", flush=True)
-    redirect(f"/projects/alpha/files/photos/{click}")
+    url = url_for("sales/invoices/[invoice-id]", invoice_id=123)
+    print("Generated URL:", url, flush=True)
+    redirect(url)
 
 
 @callback(Input("second-btn", "n_clicks"))
