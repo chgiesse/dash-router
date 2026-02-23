@@ -1,4 +1,5 @@
-from typing import Callable, get_type_hints, get_origin
+from collections.abc import Callable
+from typing import get_type_hints, get_origin
 from pydantic import BaseModel
 import inspect
 

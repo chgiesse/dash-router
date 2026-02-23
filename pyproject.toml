@@ -10,7 +10,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 pydantic = "^2.10.4"
-dash = "^3.0.0rc1"
+dash = "3.3.0"
 # Only Flash is optional - needed for flash_router package
 dash-flash = "^1.0.0" 
 

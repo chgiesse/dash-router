@@ -1,9 +1,10 @@
 from click import Option
 from ..utils.helper_functions import _invoke_layout
 from ..components import ChildContainer, LacyContainer, SlotContainer
+from collections.abc import Awaitable, Callable
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Awaitable, Optional
+from typing import Any, Optional
 from uuid import UUID
 import asyncio
 
@@ -19,14 +20,14 @@ class ExecNode:
     node_id: str
     parent_id: str
     layout: Callable[..., Awaitable[Component]] | Component
-    variables: Dict[str, str] = field(default_factory=dict)
-    slots: Dict[str, "ExecNode"] = field(default_factory=dict)
+    variables: dict[str, str] = field(default_factory=dict)
+    slots: dict[str, "ExecNode"] = field(default_factory=dict)
     child_node: Optional["ExecNode"] = "default"
     loading: Optional[Callable | Component] = None
     error: Optional[Callable | Component] = None
     is_lacy: bool = False
 
-    async def execute(self, endpoint_results: Dict[UUID, Dict[any, any]]) -> Component:
+    async def execute(self, endpoint_results: dict[UUID, dict[any, any]]) -> Component:
         """
         Executes the node by rendering its layout with the provided variables,
         slots, and views.
@@ -54,7 +55,7 @@ class ExecNode:
 
         return layout
 
-    async def handle_error(self, error: Exception, variables: Dict[str, Any]):
+    async def handle_error(self, error: Exception, variables: dict[str, Any]):
         if not self.error:
             return html.Div(str(error), className="banner")
 
@@ -62,8 +63,8 @@ class ExecNode:
         return error_layout
 
     async def _handle_slots(
-        self, endpoint_results: Dict[UUID, Dict[Any, Any]]
-    ) -> Dict[str, Component]:
+        self, endpoint_results: dict[UUID, dict[Any, Any]]
+    ) -> dict[str, Component]:
         """Executes all slot nodes and gathers their rendered components."""
         if not self.slots:
             return {}
@@ -81,8 +82,8 @@ class ExecNode:
         return results
 
     async def _handle_child(
-        self, endpoint_results: Dict[UUID, Dict[Any, Any]]
-    ) -> Dict[str, Component]:
+        self, endpoint_results: dict[UUID, dict[Any, Any]]
+    ) -> dict[str, Component]:
         """Executes the current view node."""
         if self.child_node == "default":
             return {}

@@ -8,8 +8,8 @@ from flash_router import FlashRouter, RootContainer
 
 app = Flash(
     __name__,
-    prevent_initial_callbacks=True,
-    suppress_callback_exceptions=True,
+    # prevent_initial_callbacks=True,
+    # suppress_callback_exceptions=True,
     pages_folder=str(Path(__file__).parent / "pages"),
     use_pages=False,
     router=FlashRouter,

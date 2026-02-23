@@ -1,12 +1,9 @@
 from ..utils.helper_functions import _parse_path_variables
 from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
+from collections.abc import Awaitable, Callable
 
 from typing import (
     Any,
-    Callable,
-    Dict,
-    List,
-    Awaitable,
     Optional,
     ClassVar,
     Tuple,
@@ -28,7 +25,7 @@ class RouteConfig(BaseModel):
     order: int | None = None
     image: str | None = None
     image_url: str | None = None
-    redirect_from: List[str] | None = None
+    redirect_from: list[str] | None = None
     default_layout: Callable[..., Awaitable[Component]] | Component | None = Field(
         default=None, alias="default"
     )
@@ -39,7 +36,7 @@ class RouteConfig(BaseModel):
 class RouterResponse(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    response: Dict[str, Any]
+    response: dict[str, Any]
     mimetype: str = "application/json"
     multi: bool = False
 
@@ -57,13 +54,13 @@ class PageNode(BaseModel):
     is_static: bool = False
     is_root: Optional[bool] = None
     default_child: Optional[str] = None
-    child_nodes: Dict[str, UUID] = Field(default_factory=dict)
-    slots: Dict[str, str] = Field(default_factory=dict)
+    child_nodes: dict[str, UUID] = Field(default_factory=dict)
+    slots: dict[str, str] = Field(default_factory=dict)
     path_template: Optional[str] = None
     loading: Optional[Callable[..., Awaitable[Component]] | Component] = None
     error: Optional[Callable[..., Awaitable[Component]] | Component] = None
     endpoint: Optional[Callable[..., Awaitable[Any]]] = None
-    endpoint_inputs: Optional[List[Any]] = None
+    endpoint_inputs: Optional[list[Any]] = None
 
     @property
     def is_slot(self) -> bool:
@@ -132,7 +129,7 @@ class PageNode(BaseModel):
 
 
 class RouteTable:
-    _table: ClassVar[Dict[str, PageNode]] = {}
+    _table: ClassVar[dict[str, PageNode]] = {}
 
     def __new__(cls):
         raise TypeError("RouteTable is a static class and should not be instantiated")
@@ -150,7 +147,7 @@ class RouteTable:
 
 
 class RouteTree:
-    _static_routes: ClassVar[Dict[str, str]] = {}
+    _static_routes: ClassVar[dict[str, str]] = {}
     _dynamic_routes: ClassVar[AttributeDict] = AttributeDict(
         routes={}, path_template=None
     )
@@ -267,7 +264,7 @@ class RouteTree:
         parent_node.register_route(new_node)
 
     @classmethod
-    def get_static_route(cls, ctx) -> Tuple[PageNode, Dict[str, Any]]:
+    def get_static_route(cls, ctx) -> Tuple[PageNode, dict[str, Any]]:
         path_variables = {}
         if not ctx.pathname:
             index_node = cls._static_routes.get("/")

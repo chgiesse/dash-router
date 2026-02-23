@@ -1,5 +1,3 @@
-from typing import Dict
-
 from .core.routing import PageNode
 from .utils.constants import REST_TOKEN
 
@@ -56,13 +54,13 @@ def validate_default_child(node: PageNode):
     if node.default_child and not node.child_nodes:
         raise RouteTreeValidationError(
             f"""
-            Route node: {node.module} has no child node. 
+            Route node: {node.module} has no child node.
             Setting default child {node.default_child} is not needed.
             """
         )
 
 
-def validate_slots(node: PageNode, route_table: Dict[str, PageNode]):
+def validate_slots(node: PageNode, route_table: dict[str, PageNode]):
     path_templates = []
 
     for _, slot_id in node.slots.items():
@@ -135,7 +133,7 @@ def validate_catch_all_leaf(node: PageNode):
         )
 
 
-def validate_node(node: PageNode, route_table: Dict[str, PageNode]) -> None:
+def validate_node(node: PageNode, route_table: dict[str, PageNode]) -> None:
     validate_static_route(node)
     validate_default_child(node)
     validate_slots(node, route_table)
@@ -144,6 +142,6 @@ def validate_node(node: PageNode, route_table: Dict[str, PageNode]) -> None:
     validate_catch_all_leaf(node)
 
 
-def validate_tree(route_table: Dict[str, PageNode]) -> None:
+def validate_tree(route_table: dict[str, PageNode]) -> None:
     for node in route_table.values():
         validate_node(node, route_table)

@@ -1,10 +1,11 @@
 import importlib
 import json
 import os
+from collections.abc import Awaitable, Callable
 from re import T
 import traceback
 import sys
-from typing import Awaitable, Callable, Dict, List, Literal
+from typing import Literal
 from uuid import UUID, uuid4
 from pathlib import Path
 
@@ -40,7 +41,6 @@ from ._validation import (
     validate_tree,
 )
 
-
 class Router:
     def __init__(
         self,
@@ -50,9 +50,6 @@ class Router:
         ignore_empty_folders: bool = False,
     ) -> None:
         self.app = app
-        self.static_routes = {}
-        self.dynamic_routes = {}
-        self.route_table = {}
         self.requests_pathname_prefix = requests_pathname_prefix
         self.ignore_empty_folders = ignore_empty_folders
         self.pages_folder = app.pages_folder if app.pages_folder else pages_folder
@@ -63,6 +60,8 @@ class Router:
         self.setup_route_tree()
         self.setup_router()
         self.setup_lacy_callback()
+
+        self.app.router = self
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
@@ -329,9 +328,9 @@ class Router:
         self,
         current_node: PageNode,
         ctx: RoutingContext,
-    ) -> Dict[str, ExecNode]:
+    ) -> dict[str, ExecNode]:
         """Processes all slot nodes defined on the current node."""
-        slot_exec_nodes: Dict[str, ExecNode] = {}
+        slot_exec_nodes: dict[str, ExecNode] = {}
         for slot_name, slot_id in current_node.slots.items():
             slot_node = RouteTable.get_node(slot_id)
             segment_key = slot_node.create_segment_key(None)
@@ -350,8 +349,8 @@ class Router:
     async def resolve_url(
         self,
         pathname: str,
-        query_parameters: Dict[str, any],
-        loading_state: Dict[str, any],
+        query_parameters: dict[str, any],
+        loading_state: dict[str, any],
     ) -> RouterResponse:
 
         path = self.strip_relative_path(pathname)
@@ -401,9 +400,9 @@ class Router:
     async def resolve_search(
         self,
         pathname: str,
-        query_params: Dict[str, any],
-        updated_query_parameters: Dict[str, any],
-        loading_state: Dict[str, any],
+        query_params: dict[str, any],
+        updated_query_parameters: dict[str, any],
+        loading_state: dict[str, any],
     ) -> RouterResponse:
 
         path = self.strip_relative_path(pathname)
@@ -484,7 +483,7 @@ class Router:
         return self.build_multi_response(nodes, new_loading_state, layouts)
 
     @staticmethod
-    async def gather_endpoints(endpoints: Dict[UUID, Callable[..., Awaitable[any]]]):
+    async def gather_endpoints(endpoints: dict[UUID, Callable[..., Awaitable[any]]]):
         if not endpoints:
             return {}
 
@@ -535,7 +534,7 @@ class Router:
         return RouterResponse(multi=True, response=response)
 
     def build_multi_response(
-        self, nodes: List[PageNode], loading_state, layouts: List[Component]
+        self, nodes: list[PageNode], loading_state, layouts: list[Component]
     ) -> RouterResponse:
         """Builds a response containing multiple layout updates with a single state store."""
         if not nodes or not layouts:
@@ -623,7 +622,7 @@ class Router:
             inputs.update(self.app.routing_callback_inputs)
 
             @callback(
-                Output(RootContainer.ids.dummy, "children"),
+                Output(RootContainer.ids.dummy, "id"),
                 inputs=inputs,
             )
             async def update(
@@ -650,6 +649,7 @@ class Router:
             query_parameters = loading_state.pop("query_params", {})
             node_variables = json.loads(variables)
             variables = {**qs, **query_parameters, **node_variables}
+            print(f"Loading lacy component for node_id: {node_id} with variables: {variables}", flush=True)
             lacy_node = RouteTable.get_node(node_id)
             path = self.strip_relative_path(pathname)
             segments = path.split("/")

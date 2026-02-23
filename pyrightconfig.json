@@ -2,5 +2,7 @@
     "stubPath": ".flash_router_typing",
     "reportUnknownMemberType":"none",
     "reportUnknownVariableType": "none",
-    "reportPrivateUsage": "none"
+    "reportPrivateUsage": "none",
+    "reportAny": "none",
+    "reportExplicitAny": "none",
 }

@@ -1,8 +1,9 @@
 from ast import Call
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Any, Callable, Dict, List, Literal, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
@@ -25,12 +26,12 @@ class RoutingContext:
     """Encapsulates all routing state for a single request"""
 
     pathname: str
-    query_params: Dict[str, Any]
+    query_params: dict[str, Any]
     resolve_type: Literal["search", "url", "lacy"]
-    path_vars: Dict[str, str] = field(default_factory=dict)
-    endpoints: Dict[UUID, Callable] = field(default_factory=dict)
-    segments: List[str] = field(default_factory=list)
-    _loading_states: Dict[str, Any] = field(default_factory=dict, repr=False)
+    path_vars: dict[str, str] = field(default_factory=dict)
+    endpoints: dict[UUID, Callable] = field(default_factory=dict)
+    segments: list[str] = field(default_factory=list)
+    _loading_states: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @property
     def variables(self):
@@ -40,8 +41,8 @@ class RoutingContext:
     def from_request(
         cls,
         pathname: str,
-        query_params: Dict[str, Any],
-        loading_state_dict: Dict[str, Dict],
+        query_params: dict[str, Any],
+        loading_state_dict: dict[str, dict],
         resolve_type: Literal["search", "url", "lacy"],
     ) -> "RoutingContext":
         """Create context from request data"""
@@ -138,11 +139,11 @@ class RoutingContext:
         )
         return dict(zip(keys, results))
 
-    def to_loading_state_dict(self) -> Dict[str, Any]:
+    def to_loading_state_dict(self) -> dict[str, Any]:
         """Convert context back to loading state dict for response"""
         return {**self.get_updated_loading_state(), "query_params": self.query_params}
 
-    def get_updated_loading_state(self) -> Dict[str, Dict]:
+    def get_updated_loading_state(self) -> dict[str, dict]:
         """Return only updated loading states as a dict."""
         return {
             key: {"state": state.state, "node_id": state.node_id}
