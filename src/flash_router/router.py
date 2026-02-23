@@ -8,13 +8,14 @@ import sys
 from typing import Literal
 from uuid import UUID, uuid4
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dash import html
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
-from flash import Flash, Input, Output, State, MATCH, callback
+from flash import Flash, Input, Output, State, MATCH, callback, Patch, set_props
 from flash._pages import _parse_query_string, _infer_module_name
 from quart import request
 import asyncio
@@ -270,7 +271,6 @@ class Router:
 
         next_segment = ctx.peek_segment()
         segment_key = current_node.create_segment_key(next_segment)
-
         is_lacy = ctx.should_lazy_load(current_node, segment_key)
         layout = current_node.layout
         if (
@@ -281,7 +281,7 @@ class Router:
             layout = current_node.default_layout
 
         if current_node.is_path_template:
-            ctx.consume_path_var(current_node)
+            _ = ctx.consume_path_var(current_node)
             next_segment = ctx.peek_segment()
 
         exec_node = ExecNode(
@@ -351,6 +351,7 @@ class Router:
         pathname: str,
         query_parameters: dict[str, any],
         loading_state: dict[str, any],
+        is_redirect: bool = False
     ) -> RouterResponse:
 
         path = self.strip_relative_path(pathname)
@@ -500,6 +501,7 @@ class Router:
         loading_state,
         layout: Component = None,
         remove_layout: bool = False,
+        is_redirect: bool = False
     ):
         match node:
             case None:
@@ -527,6 +529,7 @@ class Router:
                 )
 
         rendered_layout = recursive_to_plotly_json(layout)
+        loading_state["is_redirect"] = is_redirect
         response = {
             container_id: {"children": rendered_layout},
             RootContainer.ids.state_store: {"data": loading_state},
@@ -534,11 +537,11 @@ class Router:
         return RouterResponse(multi=True, response=response)
 
     def build_multi_response(
-        self, nodes: list[PageNode], loading_state, layouts: list[Component]
+        self, nodes: list[PageNode], loading_state, layouts: list[Component], is_redirect: bool = False
     ) -> RouterResponse:
         """Builds a response containing multiple layout updates with a single state store."""
         if not nodes or not layouts:
-            return self.build_response(None, {})
+            return self.build_response(None, {}, is_redirect=is_redirect)
 
         response = {}
 
@@ -584,10 +587,10 @@ class Router:
 
             query_parameters = _parse_query_string(search_)
             previous_qp = loading_state_.pop("query_params", {})
+            is_redirect = loading_state_.pop("is_redirect", False)
             _, func_kwargs = validate_and_group_input_args(args, inputs_state_indices)
             func_kwargs = dict(list(func_kwargs.items())[3:])
             varibales = {**query_parameters, **func_kwargs}
-
             if prop == "pathname":
                 try:
                     response = await self.resolve_url(
@@ -639,17 +642,19 @@ class Router:
             loading_state=State(RootContainer.ids.state_store, "data"),
         )
 
-        @callback(Output(LacyContainer.ids.container(MATCH), "children"), inputs=inputs)
+        @callback(
+            Output(LacyContainer.ids.container(MATCH), "children"),
+            inputs=inputs
+        )
         async def load_lacy_component(
             lacy_segment_id, variables, pathname, search, loading_state
         ):
-
             node_id = lacy_segment_id.get("index")
             qs = _parse_query_string(search)
             query_parameters = loading_state.pop("query_params", {})
+            _ = loading_state.pop("is_redirect", False)
             node_variables = json.loads(variables)
             variables = {**qs, **query_parameters, **node_variables}
-            print(f"Loading lacy component for node_id: {node_id} with variables: {variables}", flush=True)
             lacy_node = RouteTable.get_node(node_id)
             path = self.strip_relative_path(pathname)
             segments = path.split("/")
@@ -675,5 +680,4 @@ class Router:
 
             endpoint_results = await ctx.gather_endpoints()
             layout = await exec_tree.execute(endpoint_results)
-
             return layout

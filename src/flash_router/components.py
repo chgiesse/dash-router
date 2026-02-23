@@ -76,6 +76,7 @@ class RootContainer(html.Div):
         location: str = "dash-router-location"
         state_store: str = "dash-router-loading-state-store"
         dummy: str = "dash-router-dummy-location"
+        redirect_prop: str = "data-from-redirect"
 
     def __init__(self) -> None:
         super().__init__(

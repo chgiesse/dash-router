@@ -7,6 +7,7 @@ from components import create_box
 async def layout(children: ChildContainer = None, **kwargs):
     sample_links = html.Ul(
         [
+            html.Li(dcc.Link("home", href="/")),
             html.Li(dcc.Link("/projects", href="/projects")),
             html.Li(dcc.Link("/projects/alpha", href="/projects/alpha")),
             html.Li(dcc.Link("/projects/alpha/files", href="/projects/alpha/files")),

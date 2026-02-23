@@ -23,7 +23,7 @@ def create_box(name: str, content=None, *args, **kwargs):
             content,
         ],
         style={
-            "border": "1px solid #999",
+            # "border": "1px solid #999",
             "padding": "8px",
             "margin": "8px",
         },

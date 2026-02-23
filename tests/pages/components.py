@@ -6,25 +6,12 @@ from dash.development.base_component import Component
 from flash_router.navigation import url_for
 from flash_router.components import RootContainer
 from flash_router.router import Router
-from flash import Flash, State, callback, Input, Output, get_app, clientside_callback
+from flash import Flash, State, callback, Input, Output, get_app
 from quart.ctx import after_this_request
-from quart import Response, request
+from quart import Response
 from dash import html, dcc
-import json
+import asyncio
 
-
-def redirect(url: str | None = None, params: dict[str, str] | None = None):
-    @after_this_request
-    async def handle_redirect(_: Response):
-        req_data = await request.get_json()
-        print(req_data, flush=True)
-        update = {RootContainer.ids.dummy: {"href": url}}
-        data = {
-            "multi": True,
-            "response": update
-        }
-        new_response = Response(json.dumps(data), status=200, mimetype="application/json")
-        return new_response
 
 def routing_callback(
     *_args: Any,
@@ -71,6 +58,7 @@ def routing_callback(
             loading_state = dict((args[-1] or {})) if args else {}
             cb_args = args[:-1] if args else args
             state_query_parameters = dict(loading_state.pop("query_params", {}) or {})
+            is_redirect = loading_state.pop("is_redirect")
             cb_result = await func(*cb_args, **kwargs)
 
             @after_this_request
@@ -91,9 +79,9 @@ def routing_callback(
                 pathname = parsed.path or "/"
                 url_query_parameters = dict(parse_qsl(parsed.query, keep_blank_values=True))
                 query_parameters = {**state_query_parameters, **url_query_parameters}
-
                 router_response = await router.resolve_url(pathname, query_parameters, loading_state)
-                router_response.response[RootContainer.ids.location] = {"href": url, "refresh": False}
+                router_response.response[RootContainer.ids.location] = {"href": url}
+                router_response.response[RootContainer.ids.state_store]["data"]["is_redirect"] = True
                 response = Response(router_response.model_dump_json(), status=200, mimetype="application/json")
                 return response
             return
@@ -104,7 +92,7 @@ def routing_callback(
 button = html.Button("Click Me - Check redirect", id="test-redirect-button")
 url = dcc.Location(id="test-redirect-location", refresh="callback-nav")
 second_button = html.Button("Second button", "second-btn")
-loader = dcc.Loading(id="loader", type="circle", display="hide")
+loader = dcc.Loading(id="loader", type="circle", display="hide", delay_show=200, fullscreen=True)
 
 
 @routing_callback(
@@ -113,27 +101,6 @@ loader = dcc.Loading(id="loader", type="circle", display="hide")
     optional=True
 )
 async def redirect_callback(_: int):
+    await asyncio.sleep(3)
     url = url_for("projects/[team-id]/files/[--rest]", team_id="alpha", rest=["photos", "folder1"])
     return url
-
-# @callback(Input("second-btn", "n_clicks", allow_optional=True), prevent_initial_call=True)
-# async def test2(_: int):
-#     print("Executed second callback", flush=True)
-#     print("WTF", ctx, flush=True)
-#     url = url_for("projects/[team-id]/files/[--rest]", team_id="alpha", rest=["file1", "file2"])
-#     return redirect(url)
-
-clientside_callback(
-    """
-    (href, refresh) => {
-        if (href && !refresh) {
-            return "callback-nav";
-        }
-        return window.dash_clientside.no_update;
-    }
-    """,
-    Output(RootContainer.ids.location, "refresh"),
-    Input(RootContainer.ids.location, "href"),
-    Input(RootContainer.ids.location, "refresh"),
-    prevent_initial_call=True
-)
