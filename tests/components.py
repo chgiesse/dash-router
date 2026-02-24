@@ -13,17 +13,12 @@ def _format_value(value):
 
 
 def create_box(name: str, content=None, *args, **kwargs):
-    formatted_args = [_format_value(item) for item in args]
-    formatted_kwargs = {key: _format_value(item) for key, item in kwargs.items()}
-    details = pformat({"args": formatted_args, "kwargs": formatted_kwargs}, width=80)
     return html.Div(
         [
             html.Div(name, style={"fontWeight": "600"}),
-            html.Pre(details),
             content,
         ],
         style={
-            # "border": "1px solid #999",
             "padding": "8px",
             "margin": "8px",
         },

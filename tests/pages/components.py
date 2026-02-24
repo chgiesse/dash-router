@@ -58,7 +58,7 @@ def routing_callback(
             loading_state = dict((args[-1] or {})) if args else {}
             cb_args = args[:-1] if args else args
             state_query_parameters = dict(loading_state.pop("query_params", {}) or {})
-            is_redirect = loading_state.pop("is_redirect")
+            _ = loading_state.pop("is_redirect")
             cb_result = await func(*cb_args, **kwargs)
 
             @after_this_request
@@ -79,9 +79,8 @@ def routing_callback(
                 pathname = parsed.path or "/"
                 url_query_parameters = dict(parse_qsl(parsed.query, keep_blank_values=True))
                 query_parameters = {**state_query_parameters, **url_query_parameters}
-                router_response = await router.resolve_url(pathname, query_parameters, loading_state)
+                router_response = await router.resolve_url(pathname, query_parameters, loading_state, is_redirect=True)
                 router_response.response[RootContainer.ids.location] = {"href": url}
-                router_response.response[RootContainer.ids.state_store]["data"]["is_redirect"] = True
                 response = Response(router_response.model_dump_json(), status=200, mimetype="application/json")
                 return response
             return
@@ -92,7 +91,15 @@ def routing_callback(
 button = html.Button("Click Me - Check redirect", id="test-redirect-button")
 url = dcc.Location(id="test-redirect-location", refresh="callback-nav")
 second_button = html.Button("Second button", "second-btn")
-loader = dcc.Loading(id="loader", type="circle", display="hide", delay_show=200, fullscreen=True)
+loader = dcc.Loading(
+    id="loader",
+    type="circle",
+    display="hide",
+    delay_show=200,
+    fullscreen=True,
+    overlay_style={"filter": "blur(2px)"},
+    style={ "backgroundColor": "var(--bg-elev)"},
+)
 
 
 @routing_callback(
