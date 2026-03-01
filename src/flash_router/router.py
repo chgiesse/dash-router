@@ -7,14 +7,15 @@ import traceback
 import sys
 
 from dash import html
-from dash._hooks import HooksManager
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
 from flash import Flash, Input, Output, State, MATCH, callback
 from flash._pages import _parse_query_string, _infer_module_name
+from flash._callback_context import context_value
 from quart import request
+import quart
 
 from .utils.constants import DEFAULT_LAYOUT_TOKEN
 from .utils.helper_functions import (
@@ -60,8 +61,8 @@ class Router:
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
-        pages_path = Path(self.pages_folder)
-        app_dir = pages_path.parent
+        app_dir = quart.helpers.get_root_path(self.app.config.name) # pyright: ignore[reportUnknownArgumentType]
+        pages_path = Path(os.path.join(app_dir, self.pages_folder))
 
         if not pages_path.exists():
             raise FileNotFoundError((
@@ -70,7 +71,7 @@ class Router:
                 f"Current working directory: {self.pages_folder}\n"
             ))
 
-        self._traverse_directory(str(app_dir), self.pages_folder, None)
+        self._traverse_directory(app_dir, self.pages_folder, None)
         validate_tree(RouteRegistry._nodes)
         generate_navigation_typing(sorted(RouteRegistry._nodes.keys()))
 
@@ -89,7 +90,9 @@ class Router:
         dir_has_page = "page.py" in entries
 
         if dir_has_page:
+            print(f"Loading route module for segment '{segment}' at {current_dir}")
             new_node = self.load_route_module(current_dir, segment, current_node)
+            print(new_node)
             RouteRegistry.register_node(new_node, current_node)
             next_node = new_node
         else:
@@ -107,7 +110,9 @@ class Router:
         self, current_dir: str, segment: str, parent_node: PageNode | None
     ):
         """Load modules and create Page Node"""
-        relative_path = os.path.relpath(current_dir, self.pages_folder)
+        app_dir = quart.helpers.get_root_path(self.app.config.name)
+        pages_root = os.path.join(app_dir, self.pages_folder)
+        relative_path = os.path.relpath(current_dir, pages_root)
         relative_path = format_relative_path(relative_path)
         page_module_name = path_to_module(relative_path, "page.py")
         parent_node_id = parent_node.node_id if parent_node else None
@@ -516,11 +521,19 @@ class Router:
 
         rendered_layout = recursive_to_plotly_json(layout)
         loading_states["is_redirect"] = is_redirect # pyright: ignore[reportArgumentType]
-        response = {
+        response: dict[str, Any] = {
             container_id: {"children": rendered_layout},
             RootContainer.ids.state_store: {"data": loading_states},
         }
-        return RouterResponse(multi=True, response=response) # pyright: ignore[reportUnknownArgumentType]
+
+        callback_ctx = context_value.get()
+        side_update = getattr(callback_ctx, "updated_props", None)
+
+        return RouterResponse(
+            multi=True,
+            response=response,
+            sideUpdate=side_update if side_update else None,
+        )
 
     def build_multi_response(
         self, nodes: list[PageNode], loading_states: dict[str, PathVariables], layouts: list[Component], is_redirect: bool = False
@@ -529,13 +542,20 @@ class Router:
         if not nodes or not layouts:
             return self.build_response(None, loading_states, is_redirect=is_redirect)
 
-        response = {}
+        response: dict[str, Any] = {}
 
         for node, layout in zip(nodes, layouts):
             single_response = self.build_response(node, loading_states, layout)
             response.update(single_response.response)
 
-        return RouterResponse(multi=True, response=response) # pyright: ignore[reportUnknownArgumentType]
+        callback_ctx: Any = context_value.get()
+        side_update = getattr(callback_ctx, "updated_props", None)
+
+        return RouterResponse(
+            multi=True,
+            response=response,
+            sideUpdate=side_update if side_update else None,
+        )
 
     # ─── ASYNC & SYNC ROUTER SETUP ───────────────────────────────────────────────────
     def setup_router(self) -> None:
@@ -558,48 +578,55 @@ class Router:
             if changed_prop_id != RootContainer.ids.location:
                 return
 
-            output = body["output"]
-            inputs = body.get("inputs", [])
-            state = body.get("state", [])
-            cb_data = self.app.callback_map[output]
-            inputs_state_indices = cb_data["inputs_state_indices"]
-            args = inputs_to_vals(inputs + state)
+            callback_context = self.app._initialize_context(body)
+            callback_token = context_value.set(callback_context)
 
-            if self.app.routing_callback_inputs:
-                pathname_, search_, loading_state_, states_ = args
-            else:
-                pathname_, search_, loading_state_ = args
-                states_ = {}
+            try:
+                output = body["output"]
+                inputs = body.get("inputs", [])
+                state = body.get("state", [])
+                cb_data = self.app.callback_map[output]
+                inputs_state_indices = cb_data["inputs_state_indices"]
+                args = inputs_to_vals(inputs + state)
 
-            query_parameters = _parse_query_string(search_)
-            previous_qp = loading_state_.pop("query_params", {})
-            is_redirect = loading_state_.pop("is_redirect", False)
-            _, func_kwargs = validate_and_group_input_args(args, inputs_state_indices)
-            func_kwargs = dict(list(func_kwargs.items())[3:])
-            varibales = {**query_parameters, **func_kwargs, **states_}
-            if prop == "pathname":
-                try:
-                    response = await self.resolve_url(
-                        pathname_, varibales, loading_state_
+                if self.app.routing_callback_inputs:
+                    pathname_, search_, loading_state_, states_ = args
+                else:
+                    pathname_, search_, loading_state_ = args
+                    states_ = {}
+
+                query_parameters = _parse_query_string(search_)
+                previous_qp = loading_state_.pop("query_params", {})
+                is_redirect = loading_state_.pop("is_redirect", False)
+                _, func_kwargs = validate_and_group_input_args(args, inputs_state_indices)
+                func_kwargs = dict(list(func_kwargs.items())[3:])
+                variables = {**query_parameters, **func_kwargs, **states_}
+
+                if prop == "pathname":
+                    try:
+                        response = await self.resolve_url(
+                            pathname_, variables, loading_state_, is_redirect=is_redirect
+                        )
+                        return response.model_dump(exclude_none=True)
+                    except Exception:
+                        print(f"Traceback: {traceback.format_exc()}")
+                        raise Exception("Failed to resolve the URL")
+
+                if prop == "search":
+                    updated = dict(set(query_parameters.items()) - set(previous_qp.items()))
+                    missing_keys = previous_qp.keys() - query_parameters.keys()
+                    missing = {
+                        key: None
+                        for key in missing_keys
+                        if key not in self.app.routing_callback_inputs
+                    }
+                    updates = dict(updated.items() | missing.items())
+                    response = await self.resolve_search(
+                        pathname_, variables, updates, loading_state_
                     )
-                    return response.model_dump()
-                except Exception:
-                    print(f"Traceback: {traceback.format_exc()}")
-                    raise Exception("Failed to resolve the URL")
-
-            if prop == "search":
-                updated = dict(set(query_parameters.items()) - set(previous_qp.items()))
-                missing_keys = previous_qp.keys() - query_parameters.keys()
-                missing = {
-                    key: None
-                    for key in missing_keys
-                    if key not in self.app.routing_callback_inputs
-                }
-                updates = dict(updated.items() | missing.items())
-                response = await self.resolve_search(
-                    pathname_, varibales, updates, loading_state_
-                )
-                return response.model_dump() if response else response
+                    return response.model_dump(exclude_none=True) if response else response
+            finally:
+                context_value.reset(callback_token)
 
         @self.app.server.before_serving
         async def trigger_router():

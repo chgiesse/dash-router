@@ -30,7 +30,8 @@ class RouterResponse(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     response: dict[str, Any]
-    mimetype: str = "application/json"
+    sideUpdate: dict[str, Any] | None = None
+    # mimetype: str = "application/json"
     multi: bool = False
 
 

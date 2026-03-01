@@ -11,7 +11,7 @@ app = Flash(
     __name__,
     # prevent_initial_callbacks=True,
     # suppress_callback_exceptions=True,
-    pages_folder=str(Path(__file__).parent / "pages"),
+    pages_folder="pages",
     use_pages=False,
     router=FlashRouter,
 )
