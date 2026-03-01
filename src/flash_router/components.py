@@ -21,7 +21,7 @@ class ChildContainer(html.Div):
 
     def __init__(
         self,
-        layout: Component,
+        layout: Component | None,
         parent_segment: str,
         segment: str | None = None,
         *args,
@@ -51,7 +51,7 @@ class SlotContainer(html.Div):
 
     def __init__(
         self,
-        layout: Component,
+        layout: Component | None,
         parent_segment: str,
         slot_name: str,
         is_loaded: bool = True,
@@ -96,7 +96,7 @@ class LacyContainer(html.Div):
             "type": "dash-router-lacy-component",
         }
 
-    def __init__(self, children: Component, node_id: str, variables: dict[str, Any]):
+    def __init__(self, children: Component | None, node_id: str, variables: dict[str, Any]):
         data_prop = {"data-path": json.dumps(variables)}
 
         super().__init__(

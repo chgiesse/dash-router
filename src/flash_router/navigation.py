@@ -87,7 +87,6 @@ def url_for(
     return "/" + "/".join(resolved_segments)
 
 
-
 def _canonicalize_route_ids(route_ids: list[str]) -> list[str]:
     canonical_route_ids: list[str] = []
 

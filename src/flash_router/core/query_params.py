@@ -3,6 +3,8 @@ from typing import get_type_hints, get_origin
 from pydantic import BaseModel
 import inspect
 
+from ..types import QueryParams, Layout, Endpoint, PathVariables, BaseType
+
 
 def classify_type(obj):
     """Classify what kind of type this is"""
@@ -28,11 +30,11 @@ def should_skip(obj):
     return classify_type(obj) not in ("builtin", "typing", "pydantic")
 
 
-def extract_function_inputs(func: Callable):
+def extract_function_inputs(func: Layout | Endpoint | None):
     """Recursively extracts function & class inputs"""
     valid_classes = ("builtin", "typing", "pydantic")
-    inputs = []
-    types = {}
+    inputs = list[str]()
+    types = dict[str, type]()
 
     if not func:
         return inputs, types
@@ -45,7 +47,7 @@ def extract_function_inputs(func: Callable):
 
         if type_class == "pydantic":
             model_inputs = extract_pydantic_fields(param_type)
-            inputs += model_inputs
+            inputs.extend(model_inputs)
             types[param_name] = param_type
             continue
 
@@ -55,10 +57,10 @@ def extract_function_inputs(func: Callable):
     return inputs, types
 
 
-def extract_pydantic_fields(model_class):
+def extract_pydantic_fields(model_class: type[BaseModel]):
     """Extract fields from a Pydantic model"""
-    fields = []
+    fields = set[str]()
     for field_name, _ in model_class.model_fields.items():
-        fields.append(field_name)
+        fields.add(field_name)
 
     return fields

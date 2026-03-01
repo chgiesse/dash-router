@@ -1,5 +1,4 @@
-from flash_router.core.context import RoutingContext
-from flash_router.core.routing import RouteTree
+from flash_router.core.routing import RouteRegistry, RoutingContext
 
 from utils.helpers import done_state, get_leaf_node, get_node_by_path
 
@@ -15,7 +14,7 @@ def test_tickets_root_active_node(router):
         resolve_type="url",
     )
 
-    active_node = RouteTree.get_active_root_node(ctx, ignore_empty_folders=False)
+    active_node = RouteRegistry.get_active_root_node(ctx, ignore_empty_folders=False)
 
     assert active_node.node_id == tickets_node.node_id
 
@@ -43,7 +42,7 @@ def test_tickets_ticket_id_slot_roots(router):
         resolve_type="url",
     )
 
-    active_node = RouteTree.get_active_root_node(ctx, ignore_empty_folders=False)
+    active_node = RouteRegistry.get_active_root_node(ctx, ignore_empty_folders=False)
 
     assert active_node.node_id == ticket_node.node_id
 
@@ -77,7 +76,7 @@ def test_tickets_ticket_id_detail_nested_slot(router):
         resolve_type="url",
     )
 
-    active_node = RouteTree.get_active_root_node(ctx, ignore_empty_folders=False)
+    active_node = RouteRegistry.get_active_root_node(ctx, ignore_empty_folders=False)
 
     assert active_node.node_id == ticket_node.node_id
 
@@ -107,7 +106,7 @@ def test_tickets_ticket_id_activity_nested_slot(router):
         resolve_type="url",
     )
 
-    active_node = RouteTree.get_active_root_node(ctx, ignore_empty_folders=False)
+    active_node = RouteRegistry.get_active_root_node(ctx, ignore_empty_folders=False)
 
     assert active_node.node_id == ticket_node.node_id
 

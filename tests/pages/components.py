@@ -98,7 +98,7 @@ loader = dcc.Loading(
     delay_show=200,
     fullscreen=True,
     overlay_style={"filter": "blur(2px)"},
-    style={ "backgroundColor": "var(--bg-elev)"},
+    style={ "backgroundColor": "var(--bg-elev)" },
 )
 
 

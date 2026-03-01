@@ -14,6 +14,10 @@
   --shadow-md: 0 8px 24px rgba(2,6,23,0.6);
 }
 
+._dash-loading {
+  text-indent: -9999em;
+}
+
 *{box-sizing:border-box}
 
 html,body,#_dash-app-content{height:100%}

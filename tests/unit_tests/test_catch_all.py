@@ -1,8 +1,6 @@
 from pathlib import Path
 
-from flash_router.core.context import RoutingContext
-from flash_router.core.routing import RouteTree
-
+from flash_router.core.routing import RouteRegistry, RoutingContext
 from utils.helpers import done_state, get_leaf_node, get_node_by_path
 
 
@@ -25,7 +23,7 @@ def test_projects_files_rest_empty(router):
         resolve_type="url",
     )
 
-    active_node = RouteTree.get_active_root_node(ctx, ignore_empty_folders=False)
+    active_node = RouteRegistry.get_active_root_node(ctx, ignore_empty_folders=False)
 
     assert active_node.node_id == files_node.node_id
     assert ctx.path_vars["team_id"] == "alpha"
@@ -56,7 +54,7 @@ def test_projects_files_rest_single_segment(router):
         resolve_type="url",
     )
 
-    active_node = RouteTree.get_active_root_node(ctx, ignore_empty_folders=False)
+    active_node = RouteRegistry.get_active_root_node(ctx, ignore_empty_folders=False)
 
     assert active_node.node_id == files_node.node_id
     assert ctx.path_vars["team_id"] == "alpha"
@@ -87,7 +85,7 @@ def test_projects_files_rest_multiple_segments(router):
         resolve_type="url",
     )
 
-    active_node = RouteTree.get_active_root_node(ctx, ignore_empty_folders=False)
+    active_node = RouteRegistry.get_active_root_node(ctx, ignore_empty_folders=False)
 
     assert active_node.node_id == files_node.node_id
     assert ctx.path_vars["team_id"] == "alpha"
@@ -110,7 +108,7 @@ def test_root_files_rest_multiple_segments(router):
         resolve_type="url",
     )
 
-    active_node = RouteTree.get_active_root_node(ctx, ignore_empty_folders=False)
+    active_node = RouteRegistry.get_active_root_node(ctx, ignore_empty_folders=False)
 
     assert active_node.node_id == files_node.node_id
 

@@ -1,7 +1,8 @@
-from flash_router import ChildContainer, RouteConfig
+from typing import Any
+from flash_router.components import ChildContainer
+from flash_router.core.routing import RouteConfig
 from dash import html, dcc
 
-from components import create_box
 
 config = RouteConfig(
     default=html.Div(
@@ -14,9 +15,9 @@ config = RouteConfig(
 
 
 async def layout(
-    children: ChildContainer = None,
-    team_id: str | None = None,
-    **kwargs,
+    children: ChildContainer,
+    team_id: str,
+    **_: Any,
 ):
     # Team header and breadcrumb
     header = html.Div(
@@ -27,10 +28,5 @@ async def layout(
         className="header",
     )
 
-    content = html.Div([header, html.Div(children or [])])
-    return create_box(
-        "tests/pages/projects/[team_id]/page.py",
-        content,
-        team_id=team_id,
-        **kwargs,
-    )
+    content = html.Div([header, html.Div(children)])
+    return content

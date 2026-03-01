@@ -1,15 +1,15 @@
-from click import Option
-from ..utils.helper_functions import _invoke_layout
-from ..components import ChildContainer, LacyContainer, SlotContainer
-from collections.abc import Awaitable, Callable
+from __future__ import annotations
 
+from dash.development.base_component import Component
 from dataclasses import dataclass, field
-from typing import Any, Optional
-from uuid import UUID
+from typing import Any, Literal
+from dash import html
 import asyncio
 
-from dash import html
-from dash.development.base_component import Component
+
+from ..utils.helper_functions import _invoke_layout
+from ..types import ErrorLayout, Layout, EndpointResults, PathVariables, QueryParams
+from ..components import ChildContainer, LacyContainer, SlotContainer
 
 
 @dataclass
@@ -18,16 +18,16 @@ class ExecNode:
 
     segment: str
     node_id: str
-    parent_id: str
-    layout: Callable[..., Awaitable[Component]] | Component
-    variables: dict[str, str] = field(default_factory=dict)
+    parent_id: str | None
+    layout: Layout
+    variables: QueryParams | PathVariables = field(default_factory=dict)
     slots: dict[str, "ExecNode"] = field(default_factory=dict)
-    child_node: Optional["ExecNode"] = "default"
-    loading: Optional[Callable | Component] = None
-    error: Optional[Callable | Component] = None
+    child_node: "ExecNode | Literal['default'] | None" = "default"
+    loading: Layout  | None = None
+    error: ErrorLayout | None = None
     is_lacy: bool = False
 
-    async def execute(self, endpoint_results: dict[UUID, dict[any, any]]) -> Component:
+    async def execute(self, endpoint_results: EndpointResults) -> Component:
         """
         Executes the node by rendering its layout with the provided variables,
         slots, and views.
@@ -35,7 +35,10 @@ class ExecNode:
         data = endpoint_results.get(self.node_id)
 
         if self.is_lacy:
-            loading_layout = await _invoke_layout(self.loading, **self.variables)
+            if self.loading is None:
+                raise ValueError(f"Can not resolve a lacy layout for Execution Node: {self.node_id}")
+
+            loading_layout = await _invoke_layout(self.loading, **self.variables) # pyright: ignore[reportArgumentType]
             return LacyContainer(loading_layout, str(self.node_id), self.variables)
 
         if isinstance(data, Exception):
@@ -49,7 +52,7 @@ class ExecNode:
         all_kwargs = {**self.variables, **slots_content, **views_content, "data": data}
 
         try:
-            layout = await _invoke_layout(self.layout, **all_kwargs)
+            layout = await _invoke_layout(self.layout, **all_kwargs) # pyright: ignore[reportArgumentType]
         except Exception as e:
             layout = await self.handle_error(e, self.variables)
 
@@ -62,31 +65,29 @@ class ExecNode:
         error_layout = await _invoke_layout(self.error, error, **variables)
         return error_layout
 
-    async def _handle_slots(
-        self, endpoint_results: dict[UUID, dict[Any, Any]]
-    ) -> dict[str, Component]:
-        """Executes all slot nodes and gathers their rendered components."""
+    async def _handle_slots(self, endpoint_results: EndpointResults) -> dict[str, SlotContainer]:
         if not self.slots:
             return {}
 
         executables = [slot.execute(endpoint_results) for slot in self.slots.values()]
         views = await asyncio.gather(*executables)
-        results = {}
+        slots = {}
 
         for slot_name, slot_layout in zip(self.slots.keys(), views):
             clean_slot_name = slot_name.strip("()")
-            results[clean_slot_name] = SlotContainer(
+            slots[clean_slot_name] = SlotContainer(
                 slot_layout, self.node_id, slot_name
             )
 
-        return results
+        return slots
 
-    async def _handle_child(
-        self, endpoint_results: dict[UUID, dict[Any, Any]]
-    ) -> dict[str, Component]:
-        """Executes the current view node."""
+    async def _handle_child(self, endpoint_results: EndpointResults) -> dict[str, ChildContainer]:
         if self.child_node == "default":
-            return {}
+            return {
+            "children": ChildContainer(
+                None, self.node_id, None
+            )
+        }
 
         layout = await self.child_node.execute(endpoint_results) if self.child_node else None
 

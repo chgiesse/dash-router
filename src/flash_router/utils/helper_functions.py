@@ -1,23 +1,35 @@
-from asyncio import iscoroutinefunction
+from collections.abc import Sequence
+from ..types import Layout, QueryParams, PathVariables, BaseType, ErrorLayout
+from dash.development.base_component import Component, ComponentType
+from pydantic import BaseModel
+import inspect
 
-import os
+
 from _plotly_utils.optional_imports import get_module
 from plotly.io._json import clean_to_json_compatible, config, JsonConfig
 from fnmatch import fnmatch
 import re
+import os
 
 
-async def _invoke_layout(func, *func_args, **func_kwargs):
-    if iscoroutinefunction(func):
+async def _invoke_layout(
+    func: Layout | ErrorLayout,
+    *func_args: BaseModel | QueryParams | PathVariables | Component | BaseType | Exception,
+    **func_kwargs: BaseModel | QueryParams | PathVariables | Component | BaseType | Exception,
+) -> Component:
+    if inspect.iscoroutinefunction(func):
         return await func(*func_args, **func_kwargs)
 
-    if callable(func):
+    if inspect.isfunction(func):
         return func(*func_args, **func_kwargs)
 
-    return func
+    if isinstance(func, Component):
+        return func
+
+    raise RuntimeError(f"Error invoking layout for func: {func.__name__}")
 
 
-def recursive_to_plotly_json(component):
+def recursive_to_plotly_json(component: ComponentType):
     """
     Recursively convert a component to a JSON-serializable structure.
     Handles Plotly components, numpy arrays, pandas objects, dates/times, and other special types.
@@ -226,7 +238,7 @@ def to_json_plotly(plotly_object, pretty=False, engine=None):
         return cleaned
 
 
-def _parse_path_variables(pathname, path_template):
+def _parse_path_variables(pathname: str, path_template: str) -> PathVariables:
     """
     creates the dict of path variables passed to the layout
     e.g. path_template= "/asset/<asset_id>"
@@ -241,13 +253,13 @@ def _parse_path_variables(pathname, path_template):
 
     # check that static sections of the pathname match the template
     if not fnmatch(pathname, wildcard_pattern):
-        return None
+        return {}
 
     # parse variable names e.g. var_name from template
     var_names = re.findall("[(.*?)]", path_template)
 
     # parse variables from path
     variables = re.findall(var_pattern, pathname)
-    variables = variables[0] if isinstance(variables[0], tuple) else variables
+    variables: Sequence[BaseType] = variables[0] if isinstance(variables[0], tuple) else variables
 
     return dict(zip(var_names, variables))
