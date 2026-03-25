@@ -11,7 +11,7 @@ from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
-from flash import Flash, Input, Output, State, MATCH, callback
+from flash import Flash, Input, Output, State, MATCH, hooks
 from flash._pages import _parse_query_string, _infer_module_name
 from flash._callback_context import context_value
 from quart import request
@@ -57,6 +57,7 @@ class Router:
         self.setup_route_tree()
         self.setup_router()
         self.setup_lacy_callback()
+        self.set_clientside()
         setattr(self.app, "router", self)
 
     def setup_route_tree(self) -> None:
@@ -90,9 +91,9 @@ class Router:
         dir_has_page = "page.py" in entries
 
         if dir_has_page:
-            print(f"Loading route module for segment '{segment}' at {current_dir}")
+            # print(f"Loading route module for segment '{segment}' at {current_dir}")
             new_node = self.load_route_module(current_dir, segment, current_node)
-            print(new_node)
+            # print(new_node)
             RouteRegistry.register_node(new_node, current_node)
             next_node = new_node
         else:
@@ -528,11 +529,14 @@ class Router:
 
         callback_ctx = context_value.get()
         side_update = getattr(callback_ctx, "updated_props", None)
+        serialized_side_update = (
+            recursive_to_plotly_json(side_update) if side_update else None
+        )
 
         return RouterResponse(
             multi=True,
             response=response,
-            sideUpdate=side_update if side_update else None,
+            sideUpdate=serialized_side_update,
         )
 
     def build_multi_response(
@@ -550,11 +554,14 @@ class Router:
 
         callback_ctx: Any = context_value.get()
         side_update = getattr(callback_ctx, "updated_props", None)
+        serialized_side_update = (
+            recursive_to_plotly_json(side_update) if side_update else None
+        )
 
         return RouterResponse(
             multi=True,
             response=response,
-            sideUpdate=side_update if side_update else None,
+            sideUpdate=serialized_side_update,
         )
 
     # ─── ASYNC & SYNC ROUTER SETUP ───────────────────────────────────────────────────
@@ -601,11 +608,23 @@ class Router:
                 _, func_kwargs = validate_and_group_input_args(args, inputs_state_indices)
                 func_kwargs = dict(list(func_kwargs.items())[3:])
                 variables = {**query_parameters, **func_kwargs, **states_}
+                updated = dict(set(query_parameters.items()) - set(previous_qp.items()))
+                missing_keys = previous_qp.keys() - query_parameters.keys()
+                missing = {
+                    key: None
+                    for key in missing_keys
+                    if key not in self.app.routing_callback_inputs
+                }
+                updates = dict(updated.items() | missing.items())
 
                 if prop == "pathname":
                     try:
+                        request_loading_state = loading_state_
+                        if updates:
+                            request_loading_state = {}
+
                         response = await self.resolve_url(
-                            pathname_, variables, loading_state_, is_redirect=is_redirect
+                            pathname_, variables, request_loading_state, is_redirect=is_redirect
                         )
                         return response.model_dump(exclude_none=True)
                     except Exception:
@@ -613,14 +632,6 @@ class Router:
                         raise Exception("Failed to resolve the URL")
 
                 if prop == "search":
-                    updated = dict(set(query_parameters.items()) - set(previous_qp.items()))
-                    missing_keys = previous_qp.keys() - query_parameters.keys()
-                    missing = {
-                        key: None
-                        for key in missing_keys
-                        if key not in self.app.routing_callback_inputs
-                    }
-                    updates = dict(updated.items() | missing.items())
                     response = await self.resolve_search(
                         pathname_, variables, updates, loading_state_
                     )
@@ -637,7 +648,7 @@ class Router:
             )
             inputs.update(self.app.routing_callback_inputs)
 
-            @callback(
+            @self.app.callback(
                 Output(RootContainer.ids.dummy, "id"),
                 inputs=inputs,
                 hidden=True
@@ -656,7 +667,7 @@ class Router:
             loading_state=State(RootContainer.ids.state_store, "data"),
         )
 
-        @callback(
+        @self.app.callback(
             Output(LacyContainer.ids.container(MATCH), "children"),
             inputs=inputs,
             hidden=True
@@ -696,3 +707,44 @@ class Router:
             endpoint_results = await ctx.gather_endpoints()
             layout = await exec_tree.execute(endpoint_results)
             return layout
+
+    def set_clientside(self):
+        route_interceptor = f"""
+        const ogFetch = window.fetch
+
+        window.fetch = async (...args) => {{
+            const setProps = window.dash_clientside.set_props
+            const path = args[0]
+            const r = args[1]
+            if (path !== "/_dash-update-component") {{
+                return await ogFetch(...args)
+            }}
+            const body = r?.body
+            if (body.includes('{RootContainer.ids.dummy}.id')) {{
+                const parsed = JSON.parse(body)
+                if (parsed.output !== "{RootContainer.ids.dummy}.id") {{
+                    return await ogFetch(...args)
+                }}
+                let lssData = parsed.state[0]
+                const redirect = lssData.value.is_redirect
+                if (redirect === undefined || redirect === false ) {{
+                    return await ogFetch(...args)
+                }}
+                lssData.value.is_redirect = false
+                setProps(lssData.id, {{data: lssData.value}})
+                const dummyData = {{response: {{}}, multi: true}}
+                const dummyResponse = new Response(JSON.stringify(dummyData))
+                return dummyResponse
+            }}
+
+            og_res = await ogFetch(...args)
+            return og_res
+        }}
+        """
+
+        @hooks.index()
+        def inject_route_interceptor(app_index: str):
+            body = "<body>"
+            body_idx = app_index.find(body) + len(body)
+            updated_app_index = app_index[:body_idx] + f'<script>{route_interceptor}</script>' + app_index[body_idx:]
+            return updated_app_index

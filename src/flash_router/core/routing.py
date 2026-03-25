@@ -430,7 +430,7 @@ class RoutingContext(BaseModel):
         return {
             key: {"state": state.state, "node_id": state.node_id}
             for key, state in self.loading_states.items()
-            if state.updated == True
+            if state.updated
         }
 
     def set_silent_loading_states(self, node: PageNode, state: StateType = "done"):

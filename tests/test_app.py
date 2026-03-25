@@ -20,7 +20,5 @@ app.layout = html.Div(RootContainer(), className="app-root")
 
 # store_route_table()
 # store_route_tree()
-print(RouteRegistry._dynamic_root)
-print(RouteRegistry._nodes.get("projects/[team-id]"))
 
 app.run(port=33333, debug=True)

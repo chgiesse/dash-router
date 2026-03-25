@@ -1,11 +1,188 @@
-import re
-import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import TypeAlias, cast
-from pydantic import BaseModel
+from typing import Any, Literal, TypeAlias, cast
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit
+import json
+import quart
+import re
+
+from dash.development.base_component import Component
+from flash import Flash, State, callback, Output, get_app
+from quart.ctx import after_this_request
+from quart import Response
+from pydantic import BaseModel, Field
+
+from .components import RootContainer
 
 
 RouteId: TypeAlias = str
+
+
+class Url(BaseModel):
+    pathname: str = "/"
+    search: dict[str, Any] = Field(default_factory=dict)
+    update_type: Literal["href", "search"] = "href"
+
+    @classmethod
+    def parse(cls, href: str) -> "Url":
+        parsed = urlsplit(href)
+        return cls(
+            pathname=parsed.path or "/",
+            search=dict(parse_qsl(parsed.query, keep_blank_values=True)),
+            update_type="href",
+        )
+
+    def to(self, pathname: str) -> "Url":
+        return self.model_copy(update={"pathname": pathname, "update_type": "href"})
+
+    def set_param(self, key: str, value: Any) -> "Url":
+        """Return a new Url with a single query parameter set or replaced."""
+        return self.model_copy(update={"search": {**self.search, key: value}})
+
+    def remove_param(self, key: str) -> "Url":
+        """Return a new Url with a single query parameter removed (no-op if absent)."""
+        return self.model_copy(update={"search": {k: v for k, v in self.search.items() if k != key}})
+
+    def update_params(self, **query: Any) -> "Url":
+        """Return a new Url with multiple query parameters merged in.
+
+        Pass ``None`` as a value to remove that key.
+        """
+        return self.model_copy(update={
+            "search": {
+                **{k: v for k, v in self.search.items() if k not in query or query[k] is not None},
+                **{k: v for k, v in query.items() if v is not None},
+            },
+            "update_type": "search",
+        })
+
+    def clear_query(self) -> "Url":
+        return self.model_copy(update={"search": {}, "update_type": "search"})
+
+    def update(self, update_type: Literal["href", "search"]) -> "Url":
+        """Return a new Url with the update_type explicitly set."""
+        return self.model_copy(update={"update_type": update_type})
+
+    def to_href(self) -> str:
+        pathname = self.pathname or "/"
+        if not self.search:
+            return pathname
+        return f"{pathname}?{urlencode(self.search, doseq=True)}"
+
+
+def get_current_url(strict: bool = False) -> Url:
+    if strict and not quart.request:
+        raise RuntimeError("No request context available")
+
+    if not quart.request:
+        return Url(pathname="/", search={})
+
+    headers = quart.request.headers
+    referer = headers.get("Referer")
+    if not referer:
+        return Url(pathname=quart.request.path or "/", search={})
+
+    parsed = urlsplit(referer)
+    parsed_qs = parse_qs(parsed.query)
+    search = {key: values[0] if values else "" for key, values in parsed_qs.items()}
+    return Url(
+        pathname=parsed.path or "/",
+        search=search,
+    )
+
+
+def routing_callback(
+    *_args: Any,
+    running: list[tuple[Output, Any, Any]] | None = None,
+    on_error:  Callable[[Exception], Component]| None = None,
+    api_endpoint: str | None = None,
+    optional: bool | None = False,
+    hidden: bool | None = False,
+    **_kwargs: Any,
+):
+    obsolete_props = [
+        "background",
+        "interval",
+        "progress",
+        "progress_default",
+        "cancel",
+        "manager",
+        "cache_args_to_ignore",
+        "cache_ignore_triggered"
+    ]
+
+    if any(prop in _kwargs for prop in obsolete_props):
+        raise ValueError((
+            f"One or more obsolete properties used in routing_callback: {', '.join(obsolete_props)}. "
+            "Please remove these properties from your callback definition."
+        ))
+
+    if any(isinstance(arg, Output) for arg in _args):
+        raise ValueError("Outputs are not allowed in routing_callback. Please use the 'running' parameter to specify loading state outputs instead.")
+
+    def decorator(func: Callable[..., Any]):
+        @callback(
+            *_args,
+            State(RootContainer.ids.state_store, "data"),
+            running=running,
+            on_error=on_error,
+            api_endpoint=api_endpoint,
+            optional=optional,
+            hidden=hidden,
+            prevent_initial_call=True,
+        )
+        async def wrap(*args, **kwargs):
+
+            loading_state = dict((args[-1] or {})) if args else {}
+            cb_args = args[:-1] if args else args
+            _ = loading_state.pop("query_params", {})
+            _ = loading_state.pop("is_redirect")
+            cb_result = await func(*cb_args, **kwargs)
+
+            @after_this_request
+            async def handle_redirect(_: Response):
+                app: Flash = get_app()
+                router = getattr(app, "router", None)
+                if router is None:
+                    raise RuntimeError("FlashRouter instance not found on app. Ensure that you have initialized Flash with router=FlashRouter.")
+
+                if not cb_result:
+                    return
+
+                if not isinstance(cb_result, Url):
+                    raise ValueError(
+                        "routing_callback callback must return a Url."
+                    )
+
+                pathname = cb_result.pathname or "/"
+                query_parameters = dict(cb_result.search)
+                update_type = cb_result.update_type
+                href = cb_result.to_href()
+
+                if update_type == "search":
+                    router_response = await router.resolve_search(
+                        pathname=pathname,
+                        query_params=query_parameters,
+                        updated_query_parameters=query_parameters,
+                        loading_state=loading_state,
+                    )
+                else:
+                    router_response = await router.resolve_url(
+                        pathname,
+                        query_parameters,
+                        loading_state,
+                        is_redirect=True,
+                    )
+
+                router_response.response[RootContainer.ids.location] = {
+                    "href": href,
+                    "update_type": update_type,
+                }
+                response = Response(router_response.model_dump_json(), status=200, mimetype="application/json")
+                return response
+            return
+        return wrap
+    return decorator
 
 
 def url_for(
@@ -108,7 +285,7 @@ def _to_python_param_name(route_param: str) -> str | None:
 
 def _build_navigation_stub(route_ids: list[str]) -> str:
     lines = [
-        "from typing import Literal, overload",
+        "from typing import Any, Literal, overload",
         "from pydantic import BaseModel",
         "",
         "from ._route_types import RouteId",
@@ -196,7 +373,7 @@ def generate_navigation_typing(route_ids: list[str]) -> None:
     init_stub_path = stub_package_path / "__init__.pyi"
     init_stub = (
         "from ._route_types import RouteId\n"
-        "from .navigation import url_for\n"
+        "from .navigation import Url, get_current_url, url_for\n"
     )
     _ = init_stub_path.write_text(init_stub, encoding="utf-8")
 
