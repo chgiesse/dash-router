@@ -1,12 +1,21 @@
-# from flash_router.core.context import RoutingContext
-from ..utils.helper_functions import _parse_path_variables
-from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
-from ..types import QueryParams, PathVariables, ResolveType, StateType, Endpoint, Layout, ErrorLayout, EndpointResults
+import asyncio
+from functools import partial
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Any, ClassVar
-from functools import partial
-import asyncio
+
+from ..types import (
+    Endpoint,
+    EndpointResults,
+    ErrorLayout,
+    Layout,
+    PathVariables,
+    QueryParams,
+    ResolveType,
+    StateType,
+)
+from ..utils.constants import DEFAULT_LAYOUT_TOKEN, REST_TOKEN
+from ..utils.helper_functions import _parse_path_variables
 
 
 class RouteConfig(BaseModel):
@@ -313,11 +322,13 @@ class RoutingContext(BaseModel):
     """Encapsulates all routing state for a single request"""
     pathname: str
     query_params: QueryParams
+    updated_query_params: QueryParams
     resolve_type: ResolveType
-    path_vars: PathVariables = Field(default_factory=dict)
+    path_vars: QueryParams
     endpoints: dict[str, Endpoint] = Field(default_factory=dict)
     segments: list[str] = Field(default_factory=list)
     loading_states: dict[str, LoadingState] = Field(default_factory=dict, repr=False)
+    stales_nodes_to_update: list[PageNode] = Field(default_factory=list)
 
     @property
     def variables(self):
@@ -327,23 +338,32 @@ class RoutingContext(BaseModel):
     def from_request(
         cls,
         pathname: str,
-        query_params: QueryParams,
+        curr_qs: QueryParams,
         loading_state_dict: dict[str, PathVariables],
         resolve_type: ResolveType,
+        callback_routing_inputs: dict[str, Any] | None = None,
+        path_variables: PathVariables | None = None,
+        prev_qs: QueryParams | None = None,
     ):
         """Create context from request data"""
+        callback_routing_inputs = callback_routing_inputs or {}
+        path_variables = path_variables or {}
+        prev_qs = prev_qs or {}
         path = pathname.strip("/")
         segments = [seg for seg in path.split("/") if seg] if path else []
         loading_states = {
             segment_key: LoadingState.model_validate(ils)
             for segment_key, ils in loading_state_dict.items()
         }
+        qs_update = cls.diff_query_params(prev_qs, curr_qs, callback_routing_inputs)
         return cls(
             pathname=pathname,
-            query_params=query_params,
+            query_params=curr_qs,
             segments=segments,
             resolve_type=resolve_type,
             loading_states=loading_states,
+            updated_query_params=qs_update,
+            path_vars=path_variables
         )
 
     def get_node_state(self, segment_key: str):
@@ -368,13 +388,6 @@ class RoutingContext(BaseModel):
             raise ValueError(f"Can not add none present endpoint for Node: {node.node_id}")
         partial_endpoint = partial(endpoint, **self.variables)
         self.endpoints[node.node_id] = partial_endpoint
-
-    def should_lazy_load(self, node: PageNode, segment_key: str):
-        return (
-            node.loading is not None
-            and self.resolve_type != "lacy"
-            and DEFAULT_LAYOUT_TOKEN not in segment_key
-        )
 
     def pop_segment(self):
         """Remove and return the last segment"""
@@ -440,3 +453,18 @@ class RoutingContext(BaseModel):
             if slot_node:
                 self.set_node_state(slot_node, state, slot_name)
                 self.set_silent_loading_states(slot_node, state)
+
+    def infer_resolve_type(self):
+        pass
+
+    @staticmethod
+    def diff_query_params(prev_qs: QueryParams, curr_qs: QueryParams, routing_callback_inputs: dict[str, Any]):
+        updated = set(curr_qs.items()) - set(prev_qs.items())
+        updated = dict(updated)
+        missing_keys = prev_qs.keys() - curr_qs.keys()
+        missing = {
+            key: None
+            for key in missing_keys
+            if key not in routing_callback_inputs
+        }
+        return dict(updated.items() | missing.items())

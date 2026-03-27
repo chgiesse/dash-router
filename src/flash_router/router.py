@@ -1,42 +1,48 @@
-from importlib.util import spec_from_file_location, module_from_spec
-from typing import Literal, Any, cast
-from pathlib import Path
 import json
 import os
-import traceback
 import sys
+import traceback
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+from typing import Any, Literal, cast
 
+import quart
 from dash import html
 from dash._get_paths import app_strip_relative_path
 from dash._utils import inputs_to_vals
 from dash._validate import validate_and_group_input_args
 from dash.development.base_component import Component
-from flash import Flash, Input, Output, State, MATCH, hooks
-from flash._pages import _parse_query_string, _infer_module_name
+from flash import MATCH, Flash, Input, Output, State, hooks
 from flash._callback_context import context_value
+from flash._pages import _infer_module_name, _parse_query_string
 from quart import request
-import quart
 
-from .utils.constants import DEFAULT_LAYOUT_TOKEN
-from .utils.helper_functions import (
-    format_relative_path,
-    path_to_module,
-    recursive_to_plotly_json,
-    _invoke_layout,
-)
-
-from .types import Endpoint, ErrorLayout, Layout, QueryParams, PathVariables
-from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
-from .navigation import generate_navigation_typing
-from .core.routing import LoadingState, PageNode, RouteConfig, RouterResponse, RoutingContext, RouteRegistry
-from .core.query_params import extract_function_inputs
-from .core.execution import ExecNode
 from ._validation import (
     RouteConfigConflictError,
     RouteLayoutMissingError,
     RouteModuleImportError,
     validate_tree,
 )
+from .components import ChildContainer, LacyContainer, RootContainer, SlotContainer
+from .core.execution import ExecNode
+from .core.query_params import extract_function_inputs
+from .core.routing import (
+    PageNode,
+    RouteConfig,
+    RouteRegistry,
+    RouterResponse,
+    RoutingContext,
+)
+from .navigation import generate_navigation_typing
+from .types import Endpoint, ErrorLayout, Layout, PathVariables
+from .utils.constants import DEFAULT_LAYOUT_TOKEN
+from .utils.helper_functions import (
+    _invoke_layout,
+    format_relative_path,
+    path_to_module,
+    recursive_to_plotly_json,
+)
+
 
 class Router:
     def __init__(
@@ -62,7 +68,7 @@ class Router:
 
     def setup_route_tree(self) -> None:
         """Sets up the route tree by traversing the pages folder."""
-        app_dir = quart.helpers.get_root_path(self.app.config.name) # pyright: ignore[reportUnknownArgumentType]
+        app_dir = quart.helpers.get_root_path(self.app.config.name)
         pages_path = Path(os.path.join(app_dir, self.pages_folder))
 
         if not pages_path.exists():
@@ -262,14 +268,16 @@ class Router:
 
         next_segment = ctx.peek_segment()
         segment_key = current_node.create_segment_key(next_segment)
-        is_lacy = ctx.should_lazy_load(current_node, segment_key)
-        layout = current_node.layout
-        if (
+        is_lacy = (
+            current_node.loading is not None
+            and ctx.resolve_type != "lacy"
+            and DEFAULT_LAYOUT_TOKEN not in segment_key
+        )
+        is_default = (
             current_node.is_path_template
             and DEFAULT_LAYOUT_TOKEN in segment_key
             and current_node.default_layout is not None
-        ):
-            layout = current_node.default_layout
+        )
 
         if current_node.is_path_template:
             _ = ctx.consume_path_var(current_node)
@@ -278,13 +286,18 @@ class Router:
         exec_node = ExecNode(
             segment=segment_key,
             node_id=current_node.node_id,
-            layout=layout,
+            layout=current_node.layout,
             parent_id=current_node.parent_id,
             variables=ctx.variables,
             loading=current_node.loading,
             error=current_node.error,
             is_lacy=is_lacy,
         )
+
+        if is_default:
+            exec_node.layout = current_node.default_layout
+            ctx.set_node_state(current_node, "done", segment_key)
+            return exec_node
 
         if is_lacy:
             ctx.set_node_state(current_node, "done", segment_key)
@@ -321,7 +334,7 @@ class Router:
         ctx: RoutingContext,
     ):
         """Processes all slot nodes defined on the current node."""
-        slot_exec_nodes: dict[str, ExecNode | None] = {}
+        slot_exec_nodes: dict[str, ExecNode] = {}
         for slot_name, slot_id in current_node.slots.items():
             slot_node = RouteRegistry.get_node(slot_id)
             if not slot_node:
@@ -340,26 +353,11 @@ class Router:
 
         return slot_exec_nodes
 
-    # ─── RESPONSE BUILDER ─────────────────────────────────────
-    async def resolve_url(
-        self,
-        pathname: str,
-        query_parameters: QueryParams,
-        loading_state: dict[str, PathVariables],
-        is_redirect: bool = False
-    ) -> RouterResponse:
-        path = self.strip_relative_path(pathname)
-        ctx = RoutingContext.from_request(
-            pathname=path,
-            query_params=query_parameters,
-            loading_state_dict=loading_state,
-            resolve_type="url",
-        )
-
+    async def resolve_url(self, ctx: RoutingContext, is_redirect: bool = False) -> RouterResponse:
         static_route, path_variables = RouteRegistry.get_static_route(ctx)
         if static_route:
             layout = await _invoke_layout(
-                static_route.layout, **query_parameters, **path_variables # pyright: ignore[reportArgumentType]
+                static_route.layout, **ctx.variables, **path_variables # pyright: ignore[reportArgumentType]
             )
             return self.build_response(node=static_route, layout=layout, loading_states={})
 
@@ -389,22 +387,7 @@ class Router:
 
         return response
 
-    async def resolve_search(
-        self,
-        pathname: str,
-        query_params: dict[str, Any],
-        updated_query_parameters: dict[str, Any],
-        loading_state: dict[str, Any],
-    ) -> RouterResponse | None:
-
-        path = self.strip_relative_path(pathname)
-        ctx = RoutingContext.from_request(
-            pathname=path,
-            loading_state_dict=loading_state,
-            query_params=query_params,
-            resolve_type="search",
-        )
-
+    async def resolve_search(self, ctx: RoutingContext, is_redirect: bool = False) -> RouterResponse | None:
         # Collect all eligible nodes (nodes whose endpoint inputs match updated query parameters)
         eligible_nodes: list[PageNode] = []
         for _, loaded_node in ctx.loading_states.items():
@@ -417,7 +400,7 @@ class Router:
                 continue
 
             if any(
-                node_input in updated_query_parameters
+                node_input in ctx.updated_query_params
                 for node_input in node.endpoint_inputs
             ):
                 eligible_nodes.append(node)
@@ -432,7 +415,7 @@ class Router:
             while current:
                 # If we find a parent that needs to be processed, add it and stop traversing
                 if any(
-                    parent_input in updated_query_parameters
+                    parent_input in ctx.updated_query_params
                     for parent_input in current.endpoint_inputs
                 ):
                     nodes_to_process_ids.add(current.node_id)
@@ -478,14 +461,11 @@ class Router:
                 layouts.append(layout)
                 nodes.append(node)
 
-        new_loading_state = {
-            **loading_state,
-            **ctx.get_updated_loading_state(),
-            "query_params": query_params,
-        }
+        # Apply updates in-place to avoid allocating a large merged dict
+        ctx.loading_states.update(ctx.get_updated_loading_state())
+        ctx.loading_states["query_params"] = ctx.query_params
 
-        return self.build_multi_response(nodes, new_loading_state, layouts) # pyright: ignore[reportArgumentType]
-
+        return self.build_multi_response(nodes, ctx.loading_states, layouts, is_redirect=is_redirect) # pyright: ignore[reportArgumentType]
 
     def build_response(
         self,
@@ -549,7 +529,7 @@ class Router:
         response: dict[str, Any] = {}
 
         for node, layout in zip(nodes, layouts):
-            single_response = self.build_response(node, loading_states, layout)
+            single_response = self.build_response(node, loading_states, layout, is_redirect=is_redirect)
             response.update(single_response.response)
 
         callback_ctx: Any = context_value.get()
@@ -564,7 +544,6 @@ class Router:
             sideUpdate=serialized_side_update,
         )
 
-    # ─── ASYNC & SYNC ROUTER SETUP ───────────────────────────────────────────────────
     def setup_router(self) -> None:
         @self.app.server.before_request
         async def router():
@@ -598,43 +577,38 @@ class Router:
 
                 if self.app.routing_callback_inputs:
                     pathname_, search_, loading_state_, states_ = args
+                    states_ = states_ or {}
                 else:
                     pathname_, search_, loading_state_ = args
                     states_ = {}
 
+                path = self.strip_relative_path(pathname_)
                 query_parameters = _parse_query_string(search_)
                 previous_qp = loading_state_.pop("query_params", {})
                 is_redirect = loading_state_.pop("is_redirect", False)
                 _, func_kwargs = validate_and_group_input_args(args, inputs_state_indices)
                 func_kwargs = dict(list(func_kwargs.items())[3:])
                 variables = {**query_parameters, **func_kwargs, **states_}
-                updated = dict(set(query_parameters.items()) - set(previous_qp.items()))
-                missing_keys = previous_qp.keys() - query_parameters.keys()
-                missing = {
-                    key: None
-                    for key in missing_keys
-                    if key not in self.app.routing_callback_inputs
-                }
-                updates = dict(updated.items() | missing.items())
+                routing_ctx = RoutingContext.from_request(
+                    pathname=path,
+                    curr_qs=variables,
+                    prev_qs=previous_qp,
+                    loading_state_dict=loading_state_,
+                    resolve_type="url",
+                    callback_routing_inputs=self.app.routing_callback_inputs
+                )
 
                 if prop == "pathname":
                     try:
-                        request_loading_state = loading_state_
-                        if updates:
-                            request_loading_state = {}
-
-                        response = await self.resolve_url(
-                            pathname_, variables, request_loading_state, is_redirect=is_redirect
-                        )
+                        response = await self.resolve_url(routing_ctx, is_redirect=is_redirect)
                         return response.model_dump(exclude_none=True)
                     except Exception:
                         print(f"Traceback: {traceback.format_exc()}")
                         raise Exception("Failed to resolve the URL")
 
                 if prop == "search":
-                    response = await self.resolve_search(
-                        pathname_, variables, updates, loading_state_
-                    )
+                    routing_ctx.resolve_type = "search"
+                    response = await self.resolve_search(routing_ctx)
                     return response.model_dump(exclude_none=True) if response else response
             finally:
                 context_value.reset(callback_token)
@@ -677,10 +651,9 @@ class Router:
         ):
             node_id = lacy_segment_id.get("index")
             qs = _parse_query_string(search)
-            query_parameters = loading_state.pop("query_params", {})
+            _ = loading_state.pop("query_params", {})
             _ = loading_state.pop("is_redirect", False)
             node_variables = json.loads(variables)
-            variables = {**qs, **query_parameters, **node_variables}
             lacy_node = RouteRegistry.get_node(node_id)
             path = self.strip_relative_path(pathname)
             segments = path.split("/")
@@ -692,7 +665,8 @@ class Router:
 
             ctx = RoutingContext.from_request(
                 pathname=pathname,
-                query_params=variables,
+                curr_qs=qs,
+                path_variables=node_variables,
                 loading_state_dict=loading_state,
                 resolve_type="lacy",
             )

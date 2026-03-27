@@ -1,25 +1,46 @@
+import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal, TypeAlias, cast
 from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit
-import json
-import quart
-import re
 
+import quart
 from dash.development.base_component import Component
-from flash import Flash, State, callback, Output, get_app
-from quart.ctx import after_this_request
-from quart import Response
+from flash import Flash, Output, State, callback, get_app
 from pydantic import BaseModel, Field
+from quart import Response
+from quart.ctx import after_this_request
+
+from flash_router.core.routing import RoutingContext
 
 from .components import RootContainer
 
-
 RouteId: TypeAlias = str
+
+def get_current_url(strict: bool = False) -> "Url":
+    if strict and not quart.request:
+        raise RuntimeError("No request context available")
+
+    if not quart.request:
+        return Url(pathname="/", search={})
+
+    headers = quart.request.headers
+    referer = headers.get("Referer")
+    if not referer:
+        return Url(pathname=quart.request.path or "/", search={})
+
+    parsed = urlsplit(referer)
+    parsed_qs = parse_qs(parsed.query)
+    search = {key: values[0] if values else "" for key, values in parsed_qs.items()}
+    return Url(
+        pathname=parsed.path or "/",
+        search=search,
+    )
 
 
 class Url(BaseModel):
-    pathname: str = "/"
+    pathname: str = Field(default_factory=lambda: get_current_url(strict=True).pathname)
     search: dict[str, Any] = Field(default_factory=dict)
     update_type: Literal["href", "search"] = "href"
 
@@ -53,7 +74,7 @@ class Url(BaseModel):
                 **{k: v for k, v in self.search.items() if k not in query or query[k] is not None},
                 **{k: v for k, v in query.items() if v is not None},
             },
-            "update_type": "search",
+            "update_type": "href",
         })
 
     def clear_query(self) -> "Url":
@@ -68,27 +89,6 @@ class Url(BaseModel):
         if not self.search:
             return pathname
         return f"{pathname}?{urlencode(self.search, doseq=True)}"
-
-
-def get_current_url(strict: bool = False) -> Url:
-    if strict and not quart.request:
-        raise RuntimeError("No request context available")
-
-    if not quart.request:
-        return Url(pathname="/", search={})
-
-    headers = quart.request.headers
-    referer = headers.get("Referer")
-    if not referer:
-        return Url(pathname=quart.request.path or "/", search={})
-
-    parsed = urlsplit(referer)
-    parsed_qs = parse_qs(parsed.query)
-    search = {key: values[0] if values else "" for key, values in parsed_qs.items()}
-    return Url(
-        pathname=parsed.path or "/",
-        search=search,
-    )
 
 
 def routing_callback(
@@ -135,7 +135,7 @@ def routing_callback(
 
             loading_state = dict((args[-1] or {})) if args else {}
             cb_args = args[:-1] if args else args
-            _ = loading_state.pop("query_params", {})
+            prev_qs = loading_state.pop("query_params", {})
             _ = loading_state.pop("is_redirect")
             cb_result = await func(*cb_args, **kwargs)
 
@@ -151,32 +151,32 @@ def routing_callback(
 
                 if not isinstance(cb_result, Url):
                     raise ValueError(
-                        "routing_callback callback must return a Url."
+                        "routing_callback callback must return a Url class."
                     )
 
-                pathname = cb_result.pathname or "/"
-                query_parameters = dict(cb_result.search)
-                update_type = cb_result.update_type
-                href = cb_result.to_href()
+                routing_ctx = RoutingContext.from_request(
+                    pathname=cb_result.pathname,
+                    curr_qs=cb_result.search,
+                    loading_state_dict=loading_state,
+                    prev_qs=prev_qs,
+                    resolve_type="url",
+                )
 
-                if update_type == "search":
+                if cb_result.update_type == "search":
+                    routing_ctx.resolve_type = "search"
                     router_response = await router.resolve_search(
-                        pathname=pathname,
-                        query_params=query_parameters,
-                        updated_query_parameters=query_parameters,
-                        loading_state=loading_state,
+                        ctx=routing_ctx,
+                        is_redirect=True,
                     )
                 else:
                     router_response = await router.resolve_url(
-                        pathname,
-                        query_parameters,
-                        loading_state,
+                        ctx=routing_ctx,
                         is_redirect=True,
                     )
 
                 router_response.response[RootContainer.ids.location] = {
-                    "href": href,
-                    "update_type": update_type,
+                    "href": cb_result.to_href(),
+                    "update_type": cb_result.update_type,
                 }
                 response = Response(router_response.model_dump_json(), status=200, mimetype="application/json")
                 return response

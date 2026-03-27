@@ -49,16 +49,19 @@ class ExecNode:
             self._handle_child(endpoint_results),
         )
 
-        all_kwargs = {**self.variables, **slots_content, **views_content, "data": data}
+        all_kwargs: dict[str, Any] = {"data": data}
+        all_kwargs.update(self.variables)
+        all_kwargs.update(slots_content)
+        all_kwargs.update(views_content)
 
         try:
-            layout = await _invoke_layout(self.layout, **all_kwargs) # pyright: ignore[reportArgumentType]
+            layout = await _invoke_layout(self.layout, **all_kwargs)
         except Exception as e:
             layout = await self.handle_error(e, self.variables)
 
         return layout
 
-    async def handle_error(self, error: Exception, variables: dict[str, Any]):
+    async def handle_error(self, error: Exception | BaseException, variables: dict[str, Any]):
         if not self.error:
             return html.Div(str(error), className="banner")
 

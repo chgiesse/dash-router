@@ -14,8 +14,8 @@ import os
 
 async def _invoke_layout(
     func: Layout | ErrorLayout,
-    *func_args: BaseModel | QueryParams | PathVariables | Component | BaseType | Exception,
-    **func_kwargs: BaseModel | QueryParams | PathVariables | Component | BaseType | Exception,
+    *func_args: BaseModel | QueryParams | PathVariables | Component | BaseType | Exception | BaseException,
+    **func_kwargs: BaseModel | QueryParams | PathVariables | Component | BaseType | Exception | BaseException,
 ) -> Component:
     if inspect.iscoroutinefunction(func):
         return await func(*func_args, **func_kwargs)
