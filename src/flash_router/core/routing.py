@@ -282,7 +282,7 @@ class RouteRegistry:
                 next_segment = ctx.peek_segment()
 
             ctx.set_node_state(active_node, "done", segment_key)
-            ctx.set_silent_loading_states(active_node, "done")
+            ctx.process_descendant_nodes(active_node, "done")
 
             if child_node := active_node.get_child_node(next_segment):
                 if child_node.is_path_template and child_node.segment == REST_TOKEN:
@@ -328,7 +328,7 @@ class RoutingContext(BaseModel):
     endpoints: dict[str, Endpoint] = Field(default_factory=dict)
     segments: list[str] = Field(default_factory=list)
     loading_states: dict[str, LoadingState] = Field(default_factory=dict, repr=False)
-    stales_nodes_to_update: list[PageNode] = Field(default_factory=list)
+    descendant_nodes_to_update: list[PageNode] = Field(default_factory=list)
 
     @property
     def variables(self):
@@ -402,7 +402,7 @@ class RoutingContext(BaseModel):
             return None
 
         if node.segment == REST_TOKEN:
-            rest_value = list(reversed(self.segments))
+            rest_value = tuple(reversed(self.segments))
             self.segments = []
             self.path_vars["rest"] = rest_value
             return rest_value
@@ -446,13 +446,25 @@ class RoutingContext(BaseModel):
             if state.updated
         }
 
-    def set_silent_loading_states(self, node: PageNode, state: StateType = "done"):
+    def process_descendant_nodes(self, node: PageNode, state: StateType = "done"):
         """Mark all descendant slots as done"""
         for slot_name, slot_id in node.slots.items():
             slot_node = RouteRegistry.get_node(slot_id)
-            if slot_node:
-                self.set_node_state(slot_node, state, slot_name)
-                self.set_silent_loading_states(slot_node, state)
+            if not slot_node:
+                continue
+
+            if any(
+                nip in self.updated_query_params
+                for nip in slot_node.endpoint_inputs
+            ):
+                if slot_node.endpoint:
+                    self.add_endpoint(slot_node)
+
+                self.descendant_nodes_to_update.append(slot_node)
+                continue
+
+            self.set_node_state(slot_node, state, slot_name)
+            self.process_descendant_nodes(slot_node, state)
 
     def infer_resolve_type(self):
         pass

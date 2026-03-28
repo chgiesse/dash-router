@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import sys
@@ -366,10 +367,16 @@ class Router:
         if not active_node:
             return self.build_response(node=None, loading_states={})
 
-        exec_tree = self.build_execution_tree(
-            current_node=active_node,
-            ctx=ctx,
-        )
+        if ctx.descendant_nodes_to_update:
+            nodes = [active_node] + ctx.descendant_nodes_to_update
+            exec_trees = [self.build_execution_tree(node, ctx) for node in nodes]
+            exec_trees = [tree for tree in exec_trees if tree is not None]
+            endpoint_results = await ctx.gather_endpoints()
+            layouts = await asyncio.gather(*[exec_tree.execute(endpoint_results) for exec_tree in exec_trees])
+            new_loading_state = ctx.to_loading_state_dict()
+            return self.build_multi_response(nodes, new_loading_state, layouts, is_redirect=is_redirect)
+
+        exec_tree = self.build_execution_tree(active_node, ctx)
 
         if not exec_tree:
             return self.build_response(node=None, loading_states={})
@@ -378,14 +385,12 @@ class Router:
         final_layout = await exec_tree.execute(result_data)
         new_loading_state = ctx.to_loading_state_dict()
 
-        response = self.build_response(
+        return self.build_response(
             node=active_node,
             loading_states=new_loading_state,
             layout=final_layout,
             is_redirect=is_redirect
         )
-
-        return response
 
     async def resolve_search(self, ctx: RoutingContext, is_redirect: bool = False) -> RouterResponse | None:
         # Collect all eligible nodes (nodes whose endpoint inputs match updated query parameters)
