@@ -1,0 +1,128 @@
+/* Placeholder shown next to an empty router ChildContainer. The container itself must always be
+   rendered: later navigations patch it in place without re-rendering its parent. */
+.slot-hint {
+    display: none;
+}
+
+.slot-children > div:empty + .slot-hint {
+    display: block;
+}
+
+/* Keep table column widths and row heights identical between loading skeletons and loaded rows. */
+.showcase-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.showcase-table :is(th, td) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.showcase-table tbody td {
+    line-height: 22px;
+}
+
+.showcase-table tbody tr {
+    transition: background-color 160ms ease;
+}
+
+.showcase-table tbody tr:has(a.order-link[data-active="true"]) {
+    background-color: var(--mantine-color-indigo-light);
+}
+
+.order-link {
+    color: var(--mantine-color-anchor);
+    text-decoration: none;
+}
+
+.order-link:hover {
+    text-decoration: underline;
+}
+
+@keyframes showcase-row-in {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.showcase-table tbody tr.order-row-enter > td {
+    animation: showcase-row-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes showcase-feed-in {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#live-feed > .live-feed-item {
+    animation: showcase-feed-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .showcase-table tbody tr.order-row-enter > td,
+    #live-feed > .live-feed-item {
+        animation: none;
+    }
+}
+
+.docs-markdown pre {
+    overflow-x: auto;
+    background: var(--mantine-color-dark-8);
+    border: 1px solid var(--mantine-color-default-border);
+    padding: 12px;
+    border-radius: var(--mantine-radius-sm);
+}
+
+.docs-markdown pre code.hljs {
+    background: transparent;
+    color: var(--mantine-color-dark-0);
+    padding: 0;
+}
+
+.docs-markdown table {
+    border-collapse: collapse;
+    display: block;
+    overflow-x: auto;
+    margin: 12px 0;
+}
+
+.docs-markdown th,
+.docs-markdown td {
+    border: 1px solid var(--mantine-color-default-border);
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+/* Keep anchored headings clear of the fixed AppShell header. */
+.docs-markdown :is(h1, h2, h3, h4) {
+    scroll-margin-top: 72px;
+}
+
+/* Dark-theme syntax colors for dcc.Markdown's highlight.js blocks. */
+.docs-markdown .hljs-comment,
+.docs-markdown .hljs-quote { color: var(--mantine-color-dark-2); }
+.docs-markdown .hljs-keyword,
+.docs-markdown .hljs-selector-tag,
+.docs-markdown .hljs-literal { color: var(--mantine-color-grape-4); }
+.docs-markdown .hljs-string,
+.docs-markdown .hljs-attr,
+.docs-markdown .hljs-addition { color: var(--mantine-color-teal-4); }
+.docs-markdown .hljs-title,
+.docs-markdown .hljs-section,
+.docs-markdown .hljs-built_in { color: var(--mantine-color-indigo-3); }
+.docs-markdown .hljs-number,
+.docs-markdown .hljs-symbol { color: var(--mantine-color-orange-4); }

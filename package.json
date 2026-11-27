@@ -1,0 +1,26 @@
+{
+    "name": "dash_router",
+    "version": "0.8.0",
+    "private": true,
+    "description": "URL state components (UrlParam, UrlCommit) for dash-router",
+    "license": "MIT",
+    "scripts": {
+        "build:js": "webpack --mode production",
+        "build:backends": "rm -rf dash_router && mkdir dash_router && uv run --with pyyaml --project . dash-generate-components ./src/ts/components dash_router -p package.json --ignore \\.test\\. && rm -f dash_router/package.json dash_router/proptypes.js && mkdir -p src/dash_router/_components && find src/dash_router/_components -type f ! -name __init__.py -delete && mv dash_router/* src/dash_router/_components/ && rmdir dash_router",
+        "build": "npm run build:js && npm run build:backends"
+    },
+    "devDependencies": {
+        "@types/react": "^19.3.0",
+        "react": "^19.2.4",
+        "react-docgen": "^7",
+        "react-dom": "^19.2.4",
+        "ts-loader": "^9.5.1",
+        "typescript": "5.6.3",
+        "webpack": "^5.96.1",
+        "webpack-cli": "^5.1.4"
+    },
+    "peerDependencies": {
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4"
+    }
+}

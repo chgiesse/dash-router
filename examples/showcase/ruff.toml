@@ -1,0 +1,4 @@
+extend = "../../pyproject.toml"
+
+[lint.isort]
+known-first-party = ["dash_router", "app", "code_viewer", "data", "docs_site", "ui"]

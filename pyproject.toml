@@ -1,50 +1,55 @@
-[tool.poetry]
-name = "flash_router"
-version = "0.6.0-beta.3"
-description = "File-system based router for Dash and Flash applications."
-authors = ["chgiesse"]
-repository = "https://github.com/chgiesse/dash-router"
-license = "MIT"
+[project]
+name = "dash-router"
+version = "0.8.0"
+description = "File-system based nested & parallel router for Dash 4.5+ (Quart, FastAPI)"
+authors = [{ name = "Christian Giessel", email = "cgiessel@tesla.com" }]
 readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "dash>=4.0",
+  "pydantic>=2.9.2,<3",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-pydantic = "^2.10.4"
-dash = "3.3.0"
-# Only Flash is optional - needed for flash_router package
-dash-flash = "^1.0.0" 
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^9.0.2"
-
-[tool.basedpyright]
-typeCheckingMode = "off"
-diagnosticMode = "workspace"
-reportAny = "none"
-reportArgumentType = "none"
-reportAttributeAccessIssue = "none"
-reportCallIssue = "none"
-reportDeprecated = "none"
-reportExplicitAny = "none"
-reportGeneralTypeIssues = "none"
-reportImplicitStringConcatenation = "none"
-reportMissingTypeArgument = "none"
-reportMissingTypeStubs = "none"
-reportOptionalIterable = "none"
-reportOperatorIssue = "none"
-reportPrivateUsage = "none"
-reportReturnType = "none"
-reportUnannotatedClassAttribute = "none"
-reportUnnecessaryIsInstance = "none"
-reportUnknownArgumentType = "none"
-reportUnknownMemberType = "none"
-reportUnknownParameterType = "none"
-reportUnknownVariableType = "none"
-reportUnusedCallResult = "none"
-reportUnusedImport = "none"
-reportUnusedVariable = "none"
-reportUnreachable = "none"
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.9.0,<0.10",
+  "basedpyright>=1.18.0",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dash_router"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["src/dash_router/_components"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dash_router"]
+
+[tool.basedpyright]
+include = ["src", "tests"]
+ignore = ["src/dash_router/_components"]
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+extraPaths = ["src"]
+reportExplicitAny = false
+reportUnannotatedClassAttribute = false
+reportPrivateImportUsage = false
+reportMissingTypeStubs = false
+reportPrivateUsage = false
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportAny = false
+
